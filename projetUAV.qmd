@@ -29,19 +29,29 @@ Le contrôle de drones quadrotors est un enjeu majeur dans le domaine de la robo
 Ce projet vise à concevoir un **contrôleur optimal** capable de suivre une trajectoire prédéfinie tout en minimisant la consommation d'énergie.  
 Nous nous appuyons pour cela sur l’approche proposée par Suicmez et Kutay (2014), qui repose sur la commande optimale discrète en temps.
 
-# Contexte du problème
+# Contexte du papier
 
 - Les **quadrotors** sont des drones à 4 moteurs capables de **décoller et atterrir verticalement (VTOL)** et d’exécuter des **manœuvres agiles**.
 - Ce sont des systèmes **fortement non linéaires et instables**.
 - Leur principale limitation : **une consommation énergétique élevée**.
 
-#  Objectif du projet 
+#  Description de la problèmatique
 
 Concevoir un **contrôleur optimal** permettant à un **drone quadrotor** de :
 
 - suivre avec précision une trajectoire tridimensionnelle prédéfinie $r(k)$ ;
 - limiter la consommation d’énergie (notamment via la poussée totale $U_1$) ;
 - respecter les contraintes physiques (notamment sur les angles d’Euler) afin de conserver la validité du modèle linéarisé.
+
+Quelle méthode de résolution est la plus optimale ? <!-- A détailler ? -->
+
+
+# Description des objectifs et du plan d'action  <!-- Mélange de deux parties ?? -->
+Les objectifs du projet sont : 
+La première objectif du projet consiste à reproduire les résultats obtenu dans le papier. Pour cela on va modéliser du drone, simplifier et linéariser, définir la fonction cout,résoudre le problème d’optimisation avec l'algorithme récursif de Riccati puis visualiser les résultats. 
+Ensuite on essayera de reproduire le même modèle en le résolvant à l'aide d'une autre méthode, la méthode proposée par JuMP, all at once.
+
+Enfin cela nous permettras de comparer les performances de chaque méthode et ainsi de déterminer laquelle est la plus efficace.  
 
 #  Modélisation du système
 
@@ -82,6 +92,18 @@ U_1/m
 \end{bmatrix}
 \tag{1}
 \end{equation}
+  
+Avec 
+\begin{equation}
+LEB =
+\begin{bmatrix}
+\cos(\theta)\cos(\phi) & \sin(\theta)\sin(\phi)\cos(\psi) - \cos(\theta)\sin(\psi) & \cos(\theta)\sin(\phi)\cos(\psi) + \sin(\theta)\sin(\psi) \\
+\cos(\theta)\sin(\phi) & \sin(\theta)\sin(\phi)\sin(\psi) + \cos(\theta)\cos(\psi) & \cos(\theta)\sin(\phi)\sin(\psi) - \sin(\theta)\cos(\psi) \\
+-\sin(\theta)          & \sin(\theta)\cos(\phi)                                   & \cos(\theta)\cos(\phi)
+\end{bmatrix}
+\end{equation}
+
+
 
 
 - Équations non linéaires pour le mouvement de rotation :
@@ -163,7 +185,7 @@ r
 \end{equation}
 
 
-En utilisant l'équation 4 dans l'équation 2, on obtient : 
+En utilisant l'équation 4 dans l'équation 2, on obtient l'équation d'Euler : 
 
 \begin{equation}
 \begin{bmatrix}
@@ -188,7 +210,34 @@ En utilisant l'équation 4 dans l'équation 2, on obtient :
 
 ## Linéarisation du modèle dynamique simplifié 
 
-En posant : 
+ 
+En linéarisant LEB grâce aux hypothèses du vol stationnaire ($\theta $ et $\phi$ sont approximé à 0 tandis qu'aucune approximation n'est faite pour $\psi$) : 
+\begin{equation}
+L_{EB}^{\text{lin}} \approx
+\begin{bmatrix}
+\cos\psi & -\sin\psi & \theta \cos\psi + \phi \sin\psi \\
+\sin\psi & \cos\psi  & \theta \sin\psi - \phi \cos\psi \\
+-\theta  & \phi      & 1
+\end{bmatrix}
+\end{equation}
+
+De même en vol stationnaire $\dot{\psi} = \dot{\phi} = \dot{\theta} =0$, donc l'équation d'Euler peut s'écrire : 
+\begin{equation}
+\begin{bmatrix}
+\ddot{\phi} \\
+\ddot{\theta} \\
+\ddot{\psi}
+\end{bmatrix}
+=
+\begin{bmatrix}
+\frac{U_2 d}{I_x} \\
+\frac{U_3 d}{I_y} \\
+\frac{U_4}{I_z}
+\end{bmatrix}
+\tag{5}
+\end{equation}
+
+Afin de linéariser le modèle, on introduit X le vecteur d'état, Y le vecteur de sortie et le vecteur de commande U tels que : 
 \begin{equation}
 X =
 \begin{bmatrix}
@@ -214,7 +263,8 @@ U_1 \\ U_2 \\ U_3 \\ U_4
 \tag{6}
 \end{equation}
 
-En linéarisant les équations 1 et 5 autour du vol stationnaire grâce aux hypothèses précédentes on obtient :
+
+Enfin grâce aux hypothèses de vol stationnaire on obtient le modèle linèaire suivant : 
 
 \begin{equation}
 \dot{X} = A X + B U \quad ; \quad Y = C X
@@ -283,6 +333,7 @@ X(k + 1) = A_d X(k) + B_d U(k) \quad ; \quad Y(k) = C_d X(k)
 \end{equation}
 
 La discrétisation des équations continues $\dot{X} = AX + BU$ avec un pas de temps $T_s$ selon la méthode d’Euler (ordre 1) donne les équations discrètes suivantes :
+
 \begin{equation}
 A_d = I + T_s A
 \quad ; \quad
@@ -363,12 +414,12 @@ De part les hypothèses faites, les angles doivent être contraints près de 0
 \end{equation}
 
 
-
-
 ```{julia}
+#| output: false
 
 using Pkg
-Pkg.activate("projet_env")    
+Pkg.activate("projet_env")
+
 Pkg.add("Plots")
 Pkg.add("JuMP")
 Pkg.add("Ipopt")
@@ -377,6 +428,8 @@ Pkg.add("IterativeSolvers")
 Pkg.add("LinearMaps")
 Pkg.add("OSQP")
 Pkg.add("MathOptInterface")
+
+
 ```
 
 
@@ -388,8 +441,7 @@ Une fois ces matrices calculées, une simulation en avant (forward) permet d’e
 
 ```{julia}
 
-using LinearAlgebra 
-using Plots
+using LinearAlgebra, Plots, JuMP, Ipopt, COSMO, IterativeSolvers, LinearMaps, OSQP, MathOptInterface
 
 gr()  # Choix du backend GR pour les graphiques (fiable pour l'export PDF)
 g = 9.81  # gravité
@@ -584,6 +636,7 @@ display(plt)
 ```
 
 
+Ajouter analyse des résultats 
 
 ## partie 3
 
@@ -592,7 +645,9 @@ comme par exemple IPOPT. Le modèle est construit à partir de la librairie JuMP
 
 
 ```{julia}
-using JuMP, Ipopt
+Pkg.add("JuMP")
+
+using LinearAlgebra, Plots, JuMP, Ipopt, COSMO, IterativeSolvers, LinearMaps, OSQP, MathOptInterface
 
 
 x0 = zeros(n)
@@ -716,7 +771,7 @@ La méthode IPOPT converge belle et bien pour ce problème et on obtient une val
 
 Le solveur COSMO implémente le **Conic operator splitting method **, qui est particulièrement adaptée pour résoudre de larges problèmes d'optimisation convexe et conique dont l'objectif est donné par une fonction quadratique. Il s'agit donc d'une méthode adaptée au problème monolithique creux. Le modèle est encore une fois construit à l'aide de la librairie JuMP.
 ```{julia}
-using COSMO, IterativeSolvers, LinearMaps, OSQP, MathOptInterface
+using JuMP, COSMO, IterativeSolvers, LinearMaps, OSQP, MathOptInterface, Plots
 
 model3 = Model(COSMO.Optimizer)
 
@@ -829,6 +884,7 @@ La méthode ne parvient pas à converger en moins de 5000 itérations. Toutefois
 
 OSQP (Operator Splitting Quadratic Program) est une méthode servant a résoudre des problème quadratique à contraintes linéaires. C'est exactement les propriétés que nous souhaitons exploiter pour le problème monolithique.
 ```{julia}
+using LinearAlgebra, Plots, JuMP, Ipopt, COSMO, IterativeSolvers, LinearMaps, OSQP, MathOptInterface
 
 model2 = Model(OSQP.Optimizer)
 set_optimizer_attribute(model, "print_level", 1)
