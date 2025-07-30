@@ -37,20 +37,23 @@ Nous nous appuyons pour cela sur l’approche proposée par Suicmez et Kutay (20
 
 #  Description de la problèmatique
 
-Concevoir un **contrôleur optimal** permettant à un **drone quadrotor** de :
 
-- suivre avec précision une trajectoire tridimensionnelle prédéfinie $r(k)$ ;
-- limiter la consommation d’énergie (notamment via la poussée totale $U_1$) ;
-- respecter les contraintes physiques (notamment sur les angles d’Euler) afin de conserver la validité du modèle linéarisé.
+Le papier traité modélise un **drone quadrotor** et conçoit une commande optimale permettant de suivre avec précision une trajectoire tridimensionnelle prédéfinie $r(k)$ en limitant la consommation d'énergie et en respectant les contraintes physiques. 
 
-Quelle méthode de résolution est la plus optimale ? <!-- A détailler ? -->
+Une fois l’indice de performance défini, il est intéressant de tester différentes méthodes de résolution afin de comparer leur efficacité, leur rapidité de convergence et la qualité des trajectoires obtenues.  
+Dans la suite, nous allons donc implémenter et comparer plusieurs approches :  
+- l’algorithme récursif de Riccati (méthode dédiée pour les problèmes LQR),
+- la résolution monolithique via IPOPT (optimisation non linéaire générique),
+- la résolution avec COSMO (optimisation quadratique conique),
+- et la résolution avec OSQP (optimisation quadratique à contraintes linéaires).
+
+Cette comparaison permettra de mettre en évidence les avantages et inconvénients de chaque méthode pour le suivi optimal de trajectoire d’un drone quadrotor.
 
 
-# Description des objectifs et du plan d'action  <!-- Mélange de deux parties ?? -->
-Les objectifs du projet sont : 
-La première objectif du projet consiste à reproduire les résultats obtenu dans le papier. Pour cela on va modéliser du drone, simplifier et linéariser, définir la fonction cout,résoudre le problème d’optimisation avec l'algorithme récursif de Riccati puis visualiser les résultats. 
-Ensuite on essayera de reproduire le même modèle en le résolvant à l'aide d'une autre méthode, la méthode proposée par JuMP, all at once.
+# Description des objectifs et du plan d'action  
 
+La première objectif du projet consiste à reproduire le modèle dynamique du drone puis d'y appliquer l'algorithme reccursif de Riccati afin de reproduire les résultats obtenu dans le papier.
+Ensuite, nous essaierons de résoudre le système avec d'autres méthodes, chaque méthode sera jugée en fonction de différents critères tels que le suivi de la trajectoire, l'effort de la commande(ennergie utilisée) et la précision à l'instant final.
 Enfin cela nous permettras de comparer les performances de chaque méthode et ainsi de déterminer laquelle est la plus efficace.  
 
 #  Modélisation du système
