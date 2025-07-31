@@ -27,7 +27,7 @@ engine: julia
 
 Le contrôle de drones quadrotors est un enjeu majeur dans le domaine de la robotique autonome en raison de leur grande maniabilité, mais aussi de leur instabilité naturelle.  
 Ce projet vise à concevoir un **contrôleur optimal** capable de suivre une trajectoire prédéfinie tout en minimisant la consommation d'énergie.  
-Nous nous appuyons pour cela sur l’approche proposée par Suicmez et Kutay (2014), qui repose sur la commande optimale discrète en temps.
+Nous nous appuyons pour cela sur l’approche proposée par Suicmez et Kutay (2014), qui repose sur la commande optimale en temps discrèt.
 
 # Contexte du papier
 
@@ -37,26 +37,30 @@ Nous nous appuyons pour cela sur l’approche proposée par Suicmez et Kutay (20
 
 #  Description de la problèmatique
 
+Le papier traité modélise un **drone quadrotor** et conçoit une commande optimale permettant de minimiser une fonction objectif quadratique prenant en compte différent critères tels que la précision du suivi d'une trajectoire, la consommation d'énergie et la position finale. 
 
-Le papier traité modélise un **drone quadrotor** et conçoit une commande optimale permettant de suivre avec précision une trajectoire tridimensionnelle prédéfinie $r(k)$ en limitant la consommation d'énergie et en respectant les contraintes physiques. 
+Afin d'obtenir la commande optimale, les auteurs du papier ont utilisé la méthode récursive de Riccati pour résoudre le problème d'optimisation quadratique en temps discret. 
 
-Une fois l’indice de performance défini, il est intéressant de tester différentes méthodes de résolution afin de comparer leur efficacité, leur rapidité de convergence et la qualité des trajectoires obtenues.  
-Dans la suite, nous allons donc implémenter et comparer plusieurs approches :  
-- l’algorithme récursif de Riccati (méthode dédiée pour les problèmes LQR),
-- la résolution monolithique via IPOPT (optimisation non linéaire générique),
-- la résolution avec COSMO (optimisation quadratique conique),
-- et la résolution avec OSQP (optimisation quadratique à contraintes linéaires).
+Cependant d'autres méthodes peuvent être utilisées pour determiner la commande optimale, la méthode recursive de Riccati est-elle la plus efficace ?
 
-Cette comparaison permettra de mettre en évidence les avantages et inconvénients de chaque méthode pour le suivi optimal de trajectoire d’un drone quadrotor.
+
 
 
 # Description des objectifs et du plan d'action  
 
-La première objectif du projet consiste à reproduire le modèle dynamique du drone puis d'y appliquer l'algorithme reccursif de Riccati afin de reproduire les résultats obtenu dans le papier.
-Ensuite, nous essaierons de résoudre le système avec d'autres méthodes, chaque méthode sera jugée en fonction de différents critères tels que le suivi de la trajectoire, l'effort de la commande(ennergie utilisée) et la précision à l'instant final.
-Enfin cela nous permettras de comparer les performances de chaque méthode et ainsi de déterminer laquelle est la plus efficace.  
+La première objectif du projet consiste à **reproduire le modèle dynamique du drone** puis d'y appliquer **l'algorithme reccursif de Riccati** afin de reproduire les résultats obtenu dans le papier.  
+Ensuite, nous essaierons de résoudre le système avec **d'autres méthodes**, chaque méthode devra minimiser la fonction objectif.
+Les différentes méthodes utilisées sont :   
+- la résolution monolithique via IPOPT (optimisation non linéaire générique),  
+- la résolution avec COSMO (optimisation quadratique conique),  
+- et la résolution avec OSQP (optimisation quadratique à contraintes linéaires).  
+
+Cette comparaison permettra de mettre en évidence les avantages et inconvénients de chaque méthode pour le suivi optimal de trajectoire d’un drone quadrotor tout en déterminant laquelle est la plus efficace pour cette fonction objectif.
+ 
 
 #  Modélisation du système
+
+## Modèle dynamique non linéaire
 
 Dans un premier temps, le système est modélisé de façon dynamique à partir des équations de Newton :
 
@@ -97,14 +101,14 @@ U_1/m
 \end{equation}
   
 Avec 
-\begin{equation}
+\begin{equation*}
 LEB =
 \begin{bmatrix}
 \cos(\theta)\cos(\phi) & \sin(\theta)\sin(\phi)\cos(\psi) - \cos(\theta)\sin(\psi) & \cos(\theta)\sin(\phi)\cos(\psi) + \sin(\theta)\sin(\psi) \\
 \cos(\theta)\sin(\phi) & \sin(\theta)\sin(\phi)\sin(\psi) + \cos(\theta)\cos(\psi) & \cos(\theta)\sin(\phi)\sin(\psi) - \sin(\theta)\cos(\psi) \\
 -\sin(\theta)          & \sin(\theta)\cos(\phi)                                   & \cos(\theta)\cos(\phi)
 \end{bmatrix}
-\end{equation}
+\end{equation*}
 
 
 
@@ -153,12 +157,10 @@ r
 \tag{3}
 \end{equation}
 
-
+## Modèle dynamique non linéaire simplifié
   
-## Simplification du système
-
-L'hypothèse suivante permet ensuite de simplifier les équations :  
-Si les perturbations par rapport à la condition de vol stationnaire sont faibles, les vitesses angulaires du corps [p; q; r] et les dérivées des angles d’Euler $[\dot{\phi},\ \dot{\theta},\ \dot{\psi}]$ peuvent être considérées comme égales.
+Si les perturbations par rapport à la condition de vol stationnaire sont faibles, on suppose que les vitesses angulaires du corps [p, q, r] et les dérivées des angles d’Euler $[\dot{\phi},\ \dot{\theta},\ \dot{\psi}]$ peuvent être considérées comme égales.  
+On à alors :  
 
 \begin{equation}
 \begin{bmatrix}
@@ -188,7 +190,7 @@ r
 \end{equation}
 
 
-En utilisant l'équation 4 dans l'équation 2, on obtient l'équation d'Euler : 
+En utilisant l'équation 4 dans l'équation 2, on obtient **l'équation d'Euler** : 
 
 \begin{equation}
 \begin{bmatrix}
@@ -213,15 +215,42 @@ En utilisant l'équation 4 dans l'équation 2, on obtient l'équation d'Euler :
 
 ## Linéarisation du modèle dynamique simplifié 
 
+Pour utiliser l'algorithme LQT en temps discret, il est nécessaire de linéariser le modèle autour d'une condition d'équilibre (vol stationnaire).   
+
+À ce point d’équilibre :
+\begin{equation*}
+\begin{aligned}
+\phi &= \dot{\phi} = \theta = \dot{\theta} = \psi = \dot{\psi} = x = \dot{x} = y = \dot{y} = \dot{z} = 0,\\
+z &= 1~\text{mètre.}
+\end{aligned}
+\end{equation*}
+
+
  
-En linéarisant LEB grâce aux hypothèses du vol stationnaire ($\theta $ et $\phi$ sont approximé à 0 tandis qu'aucune approximation n'est faite pour $\psi$) : 
+En linéarisant LEB grâce aux hypothèses du vol stationnaire on obtient  : 
+\begin{equation*}
+L_{EB}^{\text{lin}} \approx I_{3}
+\end{equation*}
+
+L'équation de translation (1) devient alors :   
 \begin{equation}
-L_{EB}^{\text{lin}} \approx
 \begin{bmatrix}
-\cos\psi & -\sin\psi & \theta \cos\psi + \phi \sin\psi \\
-\sin\psi & \cos\psi  & \theta \sin\psi - \phi \cos\psi \\
--\theta  & \phi      & 1
+\ddot{x} \\
+\ddot{y} \\
+\ddot{z}
 \end{bmatrix}
+= 
+-\begin{bmatrix}
+0 \\
+0 \\
+g
+\end{bmatrix}
++ I_{3} \begin{bmatrix}
+0 \\
+0 \\
+U_1/m
+\end{bmatrix}
+\tag{6}
 \end{equation}
 
 De même en vol stationnaire $\dot{\psi} = \dot{\phi} = \dot{\theta} =0$, donc l'équation d'Euler peut s'écrire : 
@@ -237,7 +266,40 @@ De même en vol stationnaire $\dot{\psi} = \dot{\phi} = \dot{\theta} =0$, donc l
 \frac{U_3 d}{I_y} \\
 \frac{U_4}{I_z}
 \end{bmatrix}
-\tag{5}
+\tag{7}
+\end{equation}
+
+
+Le modèle peut donc se résumer à : 
+\begin{equation}
+\begin{bmatrix}
+\ddot{x} \\
+\ddot{y} \\
+\ddot{z}
+\end{bmatrix}
+= 
+-\begin{bmatrix}
+0 \\
+0 \\
+g
+\end{bmatrix}
++ I_{3} \begin{bmatrix}
+0 \\
+0 \\
+U_1/m
+\end{bmatrix}
+\quad ; \quad
+\begin{bmatrix}
+\ddot{\phi} \\
+\ddot{\theta} \\
+\ddot{\psi}
+\end{bmatrix}
+=
+\begin{bmatrix}
+\frac{U_2 d}{I_x} \\
+\frac{U_3 d}{I_y} \\
+\frac{U_4}{I_z}
+\end{bmatrix}
 \end{equation}
 
 Afin de linéariser le modèle, on introduit X le vecteur d'état, Y le vecteur de sortie et le vecteur de commande U tels que : 
@@ -328,7 +390,33 @@ C = I_{12}
   
 
 
-## Discrétisation du temps :  
+## Fonction Performance
+
+La fonction performance est construite de la façon suivante : 
+
+\begin{equation}
+J = \frac{1}{2} \sum_{k = k_0}^{k_f - 1} \left( \| C_d X(k) - r(k) \|_Q^2 + \| U(k) \|_R^2 \right)
++ \frac{1}{2} \| C_d X(k_f) - r(k_f) \|_F^2
+\tag{8}
+\end{equation}
+
+où $\|x\|_M^2 = x^\top M x$ est la norme quadratique pondérée par la matrice $M$, et $F$ est la matrice de coût terminal, souvent choisie égale à $Q$, donc $F = Q$.
+
+
+La structure de la fonction $J$ correspond à un problème d'optimisation quadratique, tel qu'étudié dans le cadre du cours sur l'optimisation sans contrainte. En effet, il s'agit de minimiser une somme pondérée d'erreurs quadratiques entre la trajectoire suivie $C_d X(k)$ et la trajectoire de référence $r(k)$, ainsi que des efforts de commande $U(k)$ et la différence de position finale.  
+
+La fonction $J$ est une fonction quadratique strictement convexe, car les matrices de pondération $Q$ et $R$ sont définies positives ($Q, R \succ 0$), ce qui garantit l'existence et l'unicité de la solution optimale.
+
+
+
+## Méthode de Riccati
+
+L’algorithme récursif de Riccati permet de résoudre ce problème efficacement sans avoir à inverser une grande matrice globale. Il procède par rétropropagation à partir de l’instant final $k_f$, ce qui est bien adapté aux problèmes de commande optimale sur un horizon fini.
+
+Afin d'appliquer la méthode de Riccati, il est nécessaire de discretiser le temps. 
+
+
+### Discrétisation du temps 
 On discrétise l'équation 7 avec un pas de temps ts=0,01s, on obtient alors un modèle discret : 
 \begin{equation}
 X(k + 1) = A_d X(k) + B_d U(k) \quad ; \quad Y(k) = C_d X(k)
@@ -349,30 +437,7 @@ C_d = C
 Le terme $C_d X(k)$ correspond à la sortie du système observée. Dans notre cas, comme $C_d = I$, cela revient à comparer directement les états à la trajectoire de référence.
 
 
-## Fonction Performance
-
-La fonction performance est construite de la façon suivante : 
-
-\begin{equation}
-J = \frac{1}{2} \sum_{k = k_0}^{k_f - 1} \left( \| C_d X(k) - r(k) \|_Q^2 + \| U(k) \|_R^2 \right)
-+ \frac{1}{2} \| C_d X(k_f) - r(k_f) \|_F^2
-\tag{8}
-\end{equation}
-
-où $\|x\|_M^2 = x^\top M x$ est la norme quadratique pondérée par la matrice $M$, et $F$ est la matrice de coût terminal, souvent choisie égale à $Q$, donc $F = Q$.
-
-
-
-La structure de la fonction $J$ correspond à un problème d'optimisation quadratique, tel qu'étudié dans le cadre du cours sur l'optimisation sans contrainte. En effet, il s'agit de minimiser une somme pondérée d'erreurs quadratiques entre la trajectoire suivie $C_d X(k)$ et la trajectoire de référence $r(k)$, ainsi que des efforts de commande $U(k)$.  
-
-Cependant, plutôt que d'utiliser des méthodes générales comme la descente de gradient ou la méthode de Newton, la solution repose ici sur l'\textit{algorithme récursif de Riccati}.
-
-La fonction $J$ est une fonction quadratique strictement convexe, car les matrices de pondération $Q$ et $R$ sont définies positives ($Q, R \succ 0$), ce qui garantit l'existence et l'unicité de la solution optimale.
-
-L’algorithme récursif de Riccati permet de résoudre ce problème efficacement sans avoir à inverser une grande matrice globale. Il procède par rétropropagation à partir de l’instant final $k_f$, ce qui est bien adapté aux problèmes de commande optimale sur un horizon fini.
-
-
-
+### Équation de Riccati
 A l'aide de l'équation de Riccati on obtient l'équation permettant de trouver la solutions du problème discrétisé :
 
 \begin{equation}
@@ -414,7 +479,7 @@ De part les hypothèses faites, les angles doivent être contraints près de 0
 -20^\circ < \theta < 20^\circ \quad ; \quad
 -20^\circ < \psi < 20^\circ
 \tag{10}
-\end{equation}
+\end{equation} 
 
 
 ```{julia}
@@ -440,13 +505,14 @@ Pkg.add("MathOptInterface")
   
 Fonctionnement de l'algorithme :  
 L'algorithme commence à la date finale $k_f$, où les conditions terminales sont imposées, puis il effectue une récursion arrière (backward) sur les matrices $P(k)$ et $g(k)$ jusqu'à l'instant initial $k_0$.  
-Une fois ces matrices calculées, une simulation en avant (forward) permet d’estimer la trajectoire optimale $\bar{X}(k)$ et les commandes optimales $\bar{U}(k)$ en appliquant les gains $L(k)$ et $L_g(k)$ à chaque pas de temps.
+Une fois ces matrices calculées, une simulation en avant (forward) permet d’estimer la trajectoire optimale $\bar{X}(k)$ et les commandes optimales $\bar{U}(k)$.
 
 ```{julia}
 
 using LinearAlgebra, Plots, JuMP, Ipopt, COSMO, IterativeSolvers, LinearMaps, OSQP, MathOptInterface
 
-gr()  # Choix du backend GR pour les graphiques (fiable pour l'export PDF)
+gr()  
+
 g = 9.81  # gravité
 
 # Dimensions système
@@ -457,35 +523,41 @@ Ts = 0.01  # pas de temps (10 ms)
 
 # Paramètres physiques du drone
 mass = 0.5 
-Ix, Iy, Iz = 0.0023, 0.0023, 0.004  # moments d’inertie autour des axes
-
-# Initialisation des matrices A et B pour le modèle linéarisé
-A = zeros(n, n)
-B = zeros(n, m)
-
-# Mise en place de la dynamique : intégrateurs entre position/vitesse/accélération
-for i in 1:2:11
-    A[i, i+1] = 1.0  # lien entre position et vitesse (ex: x, vx)
-end
-
-# Couplage entre angles et accélérations selon la dynamique du drone
-A[8, 3] = g     # acc x dépend de θ
-A[10, 1] = -g   # acc y dépend de φ
-
-# Entrées de commande (forces / moments)
-B[2,2] = 1/Ix   # moment autour de x (φ̈)
-B[4,3] = 1/Iy   # moment autour de y (θ̈)
-B[6,4] = 1/Iz   # moment autour de z (ψ̈)
-B[12,1] = 1/mass  # poussée verticale (z̈)
-
-# Discrétisation d’Euler
-Ad = I + Ts * A
-Bd = Ts * B
+Ix, Iy, Iz = 0.0023, 0.0023, 0.004  # moments d’inertie autour des axes 
 
 # Matrices de coût pour le LQR
 Q = Diagonal([100.0, 50.0, 10.0, 5.0, 0.0, 0.0, 100.0, 1.0, 100.0, 1.0, 1000.0, 0.1])
 R = Diagonal([10.0, 1e-3, 1e-3, 1e-3])  # pondération des efforts de contrôle
 F = Q  # coût terminal
+
+# ================================
+# Construction de A et B
+# ================================
+A = zeros(n, n)
+B = zeros(n, m)
+
+for i in 1:2:11
+    A[i, i+1] = 1.0  # lien entre position et vitesse (ex: x, vx)
+end
+
+
+A[8, 3] = g     # acc x dépend de θ
+A[10, 1] = -g   # acc y dépend de φ
+
+
+B[2,2] = 1/Ix   # moment autour de x (φ̈)
+B[4,3] = 1/Iy   # moment autour de y (θ̈)
+B[6,4] = 1/Iz   # moment autour de z (ψ̈)
+B[12,1] = 1/mass  # poussée verticale (z̈)
+
+
+# ================================
+# Discrétisation d’Euler
+# ================================
+Ad = I + Ts * A
+Bd = Ts * B
+
+
 
 # ================================
 # Définition des trajectoires désirées (référence)
