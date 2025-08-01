@@ -488,20 +488,23 @@ De part les hypothèses faites, les angles doivent être contraints près de 0
 using Pkg
 Pkg.activate("projet_env")
 
-Pkg.add("Plots")
-Pkg.add("JuMP")
-Pkg.add("Ipopt")
-Pkg.add("COSMO")
-Pkg.add("IterativeSolvers")
-Pkg.add("LinearMaps")
-Pkg.add("OSQP")
-Pkg.add("MathOptInterface")
+# Pkg.add("Plots")
+# Pkg.add("JuMP")
+# Pkg.add("Ipopt")
+# Pkg.add("COSMO")
+# Pkg.add("IterativeSolvers")
+# Pkg.add("LinearMaps")
+# Pkg.add("OSQP")
+# Pkg.add("MathOptInterface")
+Pkg.add("Dates")
+Pkg.add("PrettyTables")
+Pkg.add("DataFrames")
 
 
 ```
 
 
-## Partie 2 : reproduction des résultats
+# Partie 2 : reproduction des résultats
   
 Fonctionnement de l'algorithme :  
 L'algorithme commence à la date finale $k_f$, où les conditions terminales sont imposées, puis il effectue une récursion arrière (backward) sur les matrices $P(k)$ et $g(k)$ jusqu'à l'instant initial $k_0$.  
@@ -509,7 +512,8 @@ Une fois ces matrices calculées, une simulation en avant (forward) permet d’e
 
 ```{julia}
 
-using LinearAlgebra, Plots, JuMP, Ipopt, COSMO, IterativeSolvers, LinearMaps, OSQP, MathOptInterface
+using LinearAlgebra, Plots, JuMP, Ipopt, COSMO, IterativeSolvers, LinearMaps, OSQP, MathOptInterface,Dates
+start_time = now()  # début
 
 gr()  
 
@@ -577,19 +581,19 @@ for k in T÷2+1:T+1
     r[9, k] = 10.0
 end
 
-# z : montée douce de 0 à 20 entre 15s et 30s, puis redescente
+# z : montée douce de 1 à 20 entre 15s et 30s, puis redescente à 1m
 dt = Ts
 t15 = Int(15 / dt)
 t30 = Int(30 / dt)
 
 for k in 1:t15
-    r[11, k] = 0.0
+    r[11, k] = 1.0
 end
 for k in t15+1:t30
-    r[11, k] = 20.0 * ((k - t15) / (t30 - t15))
+    r[11, k] = 1.0 + (20.0 - 1.0) * ((k - t15) / (t30 - t15))
 end
 for k in t30+1:T+1
-    r[11, k] = 20.0 * (1 - (k - t30) / (T + 1 - t30))
+    r[11, k] = 1.0 + (20.0 - 1.0) * (1 - (k - t30) / (T + 1 - t30))
 end
 
 # ================================
@@ -625,6 +629,7 @@ X = zeros(n, T+1)  # états
 U = zeros(m, T)    # commandes
 
 X[:,1] = zeros(n)  # état initial
+X[11, 1] = 1.0     # état initial cohérent
 
 for k in 1:T
     # Calcul des gains à l’instant k
@@ -676,44 +681,81 @@ r_y = r[9, :]
 
 t = Ts .* (0:T)  # temps réel en secondes
 
+J_state1 = 0.0
+J_control1 = 0.0
+for k in 1:T
+    e_k = X[:,k] - r[:,k]
+    J_state1   += 0.5 * (e_k' * Q * e_k)
+    J_control1 += 0.5 * (U[:,k]' * R * U[:,k])
+end
+
+# Coût terminal
+e_final = X[:,T+1] - r[:,T+1]
+J_terminal1 = 0.5 * (e_final' * F * e_final)
+
+# Coût total
+J1 = J_state1 + J_control1 + J_terminal1
+
+end_time = now()  # fin
+
+elapsed = end_time - start_time
+
+println("=== Décomposition de la fonction objectif J ===")
+println("Coût d'état (suivi)      : ", J_state1)
+println("Coût de contrôle         : ", J_control1)
+println("Coût terminal            : ", J_terminal1)
+println("Valeur totale J          : ", J1)
+
+
+
+println("Temps d'exécution total : ", elapsed)
+
 # Création du layout 3 lignes × 2 colonnes
-plt = plot(layout = (3, 2), size=(1000, 800))
+plt1 = plot(layout = (4, 2), size=(1000, 800))
 
 # Trajectoire x
-plot!(plt[1], t, x, lw=2, label="x (suivie)", color=:blue)
-plot!(plt[1], t, r_x, lw=2, label="x (référence)", linestyle=:dash, color=:red)
-plot!(plt[1], title="Trajectoire en x", xlabel="Temps (s)", ylabel="x (m)", legend=:bottomright, grid=true)
+plot!(plt1[1], t, x, lw=2, label="x (suivie)", color=:blue)
+plot!(plt1[1], t, r_x, lw=2, label="x (référence)", linestyle=:dash, color=:red)
+plot!(plt1[1], title="Trajectoire en x", xlabel="Temps (s)", ylabel="x (m)", legend=:bottomright, grid=true)
 
 # Erreur x
-plot!(plt[2], t, e_x, lw=2, label="Erreur x", color=:purple)
-plot!(plt[2], title="Erreur de suivi (x)", xlabel="Temps (s)", ylabel="Erreur (m)", legend=:topright, grid=true)
+plot!(plt1[2], t, e_x, lw=2, label="Erreur x", color=:purple)
+plot!(plt1[2], title="Erreur de suivi (x)", xlabel="Temps (s)", ylabel="Erreur (m)", legend=:topright, grid=true)
 
 # Trajectoire y
-plot!(plt[3], t, y, lw=2, label="y (suivie)", color=:blue)
-plot!(plt[3], t, r_y, lw=2, label="y (référence)", linestyle=:dash, color=:red)
-plot!(plt[3], title="Trajectoire en y", xlabel="Temps (s)", ylabel="y (m)", legend=:bottomright, grid=true)
+plot!(plt1[3], t, y, lw=2, label="y (suivie)", color=:blue)
+plot!(plt1[3], t, r_y, lw=2, label="y (référence)", linestyle=:dash, color=:red)
+plot!(plt1[3], title="Trajectoire en y", xlabel="Temps (s)", ylabel="y (m)", legend=:bottomright, grid=true)
 
 # Erreur y
-plot!(plt[4], t, e_y, lw=2, label="Erreur y", color=:purple)
-plot!(plt[4], title="Erreur de suivi (y)", xlabel="Temps (s)", ylabel="Erreur (m)", legend=:topright, grid=true)
+plot!(plt1[4], t, e_y, lw=2, label="Erreur y", color=:purple)
+plot!(plt1[4], title="Erreur de suivi (y)", xlabel="Temps (s)", ylabel="Erreur (m)", legend=:topright, grid=true)
 
 # Trajectoire z
-plot!(plt[5], t, z, lw=2, label="z (suivie)", color=:blue)
-plot!(plt[5], t, r_z, lw=2, label="z (référence)", linestyle=:dash, color=:red)
-plot!(plt[5], title="Trajectoire en z", xlabel="Temps (s)", ylabel="z (m)", legend=:bottomright, grid=true)
+plot!(plt1[5], t, z, lw=2, label="z (suivie)", color=:blue)
+plot!(plt1[5], t, r_z, lw=2, label="z (référence)", linestyle=:dash, color=:red)
+plot!(plt1[5], title="Trajectoire en z", xlabel="Temps (s)", ylabel="z (m)", legend=:bottomright, grid=true)
 
 # Erreur z
-plot!(plt[6], t, e_z, lw=2, label="Erreur z", color=:purple)
-plot!(plt[6], title="Erreur de suivi (z)", xlabel="Temps (s)", ylabel="Erreur (m)", legend=:topright, grid=true)
+plot!(plt1[6], t, e_z, lw=2, label="Erreur z", color=:purple)
+plot!(plt1[6], title="Erreur de suivi (z)", xlabel="Temps (s)", ylabel="Erreur (m)", legend=:topright, grid=true)
+
+plot!(plt1[7], t[1:end-1], U[1,:], lw=2, label="u1", color=:blue)
+plot!(plt1[7], t[1:end-1], U[2,:], lw=2, label="u2", color=:red)
+plot!(plt1[7], t[1:end-1], U[3,:], lw=2, label="u3", color=:green)
+plot!(plt1[7], t[1:end-1], U[4,:], lw=2, label="u4", color=:orange)
+plot!(plt1[7], title="Commandes moteurs", xlabel="Temps (s)", ylabel="U", legend=:topright, grid=true)
 
 # Affichage
-display(plt)
+display(plt1)
 ```
 
 
-Ajouter analyse des résultats 
+La valeur de la fonction objectif est de 2,27*10^5. On remarque sur les graphiques que la trajectoire est plutot bien respectée avec de faibles erreurs de suivis.
+La fonction objectif comporte 3 parties, une partie suivie, une partie contrôle et une partie coût position finale. On constate que la partie suivi participe pour beaucoup à la fonction objectif (99,5%).
 
-## partie 3
+
+## partie 3 : résolution avec Ipopt
 
 Le but de cette section est de comparer les résultats obtenus dans la Partie 2 avec des résultats venant de stratégies plus générique
 comme par exemple IPOPT. Le modèle est construit à partir de la librairie JuMP. 
@@ -771,6 +813,33 @@ println("Objective value : ", objective_value(model))
 # ================================
 # Visualisation de la trajectoire et de l’erreur
 # ================================
+
+X_val = value.(X)
+U_val = value.(U)
+
+J_state2   = 0.0
+J_control2 = 0.0
+
+for k in 1:T
+    e_k = X_val[:,k] - r[:,k]
+    J_state2 += 0.5 * (e_k' * Q * e_k)[1]
+end
+
+for k in 0:T-1
+    J_control2 += 0.5 * (U_val[:,k]' * R * U_val[:,k])[1]
+end
+
+e_final = X_val[:,T] - r[:,T+1]
+J_terminal2 = 0.5 * (e_final' * F * e_final)[1]
+
+J2 = J_state2 + J_control2 + J_terminal2
+
+println("\n--- Décomposition du coût : Modèle 2 ---")
+println("J_state2    = ", J_state2)
+println("J_control2  = ", J_control2)
+println("J_terminal2 = ", J_terminal2)
+println("J2 total    = ", J2)
+
 
 solutionX = Array(value.(X))
 
@@ -833,16 +902,14 @@ display(plt2)
 
 ```
 
-# Analyse des résultats
+## Analyse des résultats
 
 La méthode IPOPT converge belle et bien pour ce problème et on obtient une valeur de l'objectif de 1.230511402197558e8. Il est possible de faire mieux avec des méthodes utilisant les propriétés du problème. Deux exemples de ces méthodes seront visités dans la prochaine section. Notons que la convergence a été atteinte en 4000 itérations pour un temps de 1.63e+001 secondes. On observe sur les graphiques que la solution proposée est efficace, en ce sens que le trajet à suivre est assez bien respectés. Notons que les erreurs sont plus grandes autour des points où il y a un changement dans la dérivée. Notre approximation étant une fonction lisse, cela n'est pas étonnant. L'erreur est aussi grande au temps final, ce qui peut être un problème dépendament des applications. Un grand déplacement programmé comme une somme de petites trajectoires pourrait facilement accumuler des erreurs.
 
 
 
 
-## Partie 4
-
-# Résolution avec le solver COSMO
+# Partie 4 : Résolution avec le solver COSMO
 
 Le solveur COSMO implémente le **Conic operator splitting method **, qui est particulièrement adaptée pour résoudre de larges problèmes d'optimisation convexe et conique dont l'objectif est donné par une fonction quadratique. Il s'agit donc d'une méthode adaptée au problème monolithique creux. Le modèle est encore une fois construit à l'aide de la librairie JuMP.
 ```{julia}
@@ -884,11 +951,44 @@ set_start_value.(U, 0.0)
 
 optimize!(model3)
 println("Status          : ", termination_status(model3))
-println("Objective value : ", objective_value(model3))
 
 # ================================
 # Visualisation de la trajectoire et de l’erreur
 # ================================
+
+X_val = value.(X)
+U_val = value.(U)
+
+J_state3   = 0.0
+J_control3 = 0.0
+
+# Coût d'état
+for k in 1:T
+    e_k = X_val[:,k] - r[:,k]
+    J_state3 += 0.5 * (e_k' * Q * e_k)[1]
+end
+
+# Coût de contrôle
+for k in 0:T-1
+    J_control3 += 0.5 * (U_val[:,k]' * R * U_val[:,k])[1]
+end
+
+# Coût terminal
+e_final = X_val[:,T] - r[:,T+1]
+J_terminal3 = 0.5 * (e_final' * F * e_final)[1]
+
+# Coût total
+J3 = J_state3 + J_control3 + J_terminal3
+
+println("\n--- Décomposition du coût ---")
+println("J_state3    = ", J_state3)
+println("J_control3  = ", J_control3)
+println("J_terminal3 = ", J_terminal3)
+println("J3 total    = ", J3)
+
+
+
+
 
 solutionX = Array(value.(X))
 
@@ -951,14 +1051,15 @@ display(plt3)
 
 
 ```
-# Analyse des résultats
+
+## Analyse des résultats
 
 La méthode ne parvient pas à converger en moins de 5000 itérations. Toutefois, on constate une amélioration de la valeur de l'objectif qui est 10x plus petite que celle obtenue via Ipopt. Le temps de calcul est toutefois beaucoup plus élevé et on en déduit que cette méthode a une plus grande complexité que l'algorithme précédent. Comme le nombre de variable est différent que dans le problème formulé et présenté dans l'article, il est difficile de comparer la complexité des deux algorithmes. Lorsque le temps de calcul est limité, il est toutefois préférable d'utiliser la méthode présentée dans l'article. Les graphes présentes une erreur qui est encore une fois espectable. On observe par aiileurs que la trajectoire en y est bien meilleure avec COSMO qu'avec Ipopt. Encore une fois, on observe de plus grandes erreurs là où il y a des changements dans la valeur des dérivées de la trajectoire à suivre. Bien que la valeur optimale obtenue via COSMO soit bonne, il est possible de faire mieux avec le solveur OSQP.
 
-# Résolution avec le solver OSQP
+# Partie 5 : Résolution avec le solver OSQP
 
 OSQP (Operator Splitting Quadratic Program) est une méthode servant a résoudre des problème quadratique à contraintes linéaires. C'est exactement les propriétés que nous souhaitons exploiter pour le problème monolithique.
-```{julia}
+ ```{julia}
 using LinearAlgebra, Plots, JuMP, Ipopt, COSMO, IterativeSolvers, LinearMaps, OSQP, MathOptInterface
 
 model2 = Model(OSQP.Optimizer)
@@ -1003,6 +1104,32 @@ println("Objective value : ", objective_value(model2))
 # ================================
 # Visualisation de la trajectoire et de l’erreur
 # ================================
+
+X_val = value.(X)
+U_val = value.(U)
+
+J_state4   = 0.0
+J_control4 = 0.0
+
+for k in 1:T
+    e_k = X_val[:,k] - r[:,k]
+    J_state4 += 0.5 * (e_k' * Q * e_k)[1]
+end
+
+for k in 0:T-1
+    J_control4 += 0.5 * (U_val[:,k]' * R * U_val[:,k])[1]
+end
+
+e_final = X_val[:,T] - r[:,T+1]
+J_terminal4 = 0.5 * (e_final' * F * e_final)[1]
+
+J4 = J_state4 + J_control4 + J_terminal4
+
+println("\n--- Décomposition du coût : Modèle 4 ---")
+println("J_state4    = ", J_state4)
+println("J_control4  = ", J_control4)
+println("J_terminal4 = ", J_terminal4)
+println("J4 total    = ", J4)
 
 solutionX = Array(value.(X))
 
@@ -1065,11 +1192,52 @@ display(plt4)
 
 ```
 
-# Analyse des résultats 
+## Analyse des résultats 
 
 Notons que cette méthode est bien plus efficace que Ipopt et COSMO. La trajectoire désirée est en général mieux approximée, le temps de calcul est meilleur que COSMO en restant très proche de celui d'Ipopt. De plus, la valeur optimale de l'objectif est dix fois plus petite que pour COSMO et cent fois plus petite qu'Ipopt. Cette méthode est donc à privilégier par rapport aux deux méthodes précédentes.
+
+
+#Description de ce qui à été réalisé
+
+Nous avons reproduit les résultats du papier puis tester différentes méthodes de résolution pour la même trajectoire demandée. 
+Cela nous permets de comparer les méthodes sur leurs performances par rapport à la fonction objectif mais aussi par rapport au temps de calcul.
+
+Les résultats sont résumé dans le tableau ci-dessous :   
+## Résultats Comparatifs des 4 Modèles
+
+```{julia}
+using PrettyTables
+
+modeles = ["Modèle de Riccati", "Ipopt", "Cosmo", "OSQP"]
+
+# Exemples de valeurs (remplace-les)
+temps_sec = [0.811, 1.243, 0.400, 0.950]
+J_state   = [J_state1, J_state2, J_state3, J_state4]
+J_control = [J_control1, J_control2, J_control3, J_control4]
+J_terminal= [J_terminal1, J_terminal2, J_terminal3, J_terminal4]
+J_total   = J_state .+ J_control .+ J_terminal
+
+data = hcat(
+    modeles,
+    round.(temps_sec, digits=3),
+    round.(J_state, digits=3),
+    round.(J_control, digits=3),
+    round.(J_terminal, digits=3),
+    round.(J_total, digits=3)
+)
+
+header = ["Modèle", "Temps (s)", "J_state", "J_control", "J_terminal", "J_total"]
+
+println(pretty_table(String, data; header=header))
+
+```
+
+# Difficultés rencontrées
+
+# Prochaines étapes 
+
+Les prochaines étapes pourraient être de tester différentes chemin à suivre afin de determiner si certaines méthodes sont plus efficaces que d'autres en fonction des conditions.
 
 ## Lien Github
 
 https://github.com/joey-van-melle/MTH8408_Optimal-Path-Tracking
-
