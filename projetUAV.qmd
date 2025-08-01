@@ -27,23 +27,40 @@ engine: julia
 
 Le contrôle de drones quadrotors est un enjeu majeur dans le domaine de la robotique autonome en raison de leur grande maniabilité, mais aussi de leur instabilité naturelle.  
 Ce projet vise à concevoir un **contrôleur optimal** capable de suivre une trajectoire prédéfinie tout en minimisant la consommation d'énergie.  
-Nous nous appuyons pour cela sur l’approche proposée par Suicmez et Kutay (2014), qui repose sur la commande optimale discrète en temps.
+Nous nous appuyons pour cela sur l’approche proposée par Suicmez et Kutay (2014), qui repose sur la commande optimale en temps discrèt.
 
-# Contexte du problème
+# Contexte du papier
 
 - Les **quadrotors** sont des drones à 4 moteurs capables de **décoller et atterrir verticalement (VTOL)** et d’exécuter des **manœuvres agiles**.
 - Ce sont des systèmes **fortement non linéaires et instables**.
 - Leur principale limitation : **une consommation énergétique élevée**.
 
-#  Objectif du projet 
+#  Description de la problèmatique
 
-Concevoir un **contrôleur optimal** permettant à un **drone quadrotor** de :
+Le papier traité modélise un **drone quadrotor** et conçoit une commande optimale permettant de minimiser une fonction objectif quadratique prenant en compte différent critères tels que la précision du suivi d'une trajectoire, la consommation d'énergie et la position finale. 
 
-- suivre avec précision une trajectoire tridimensionnelle prédéfinie $r(k)$ ;
-- limiter la consommation d’énergie (notamment via la poussée totale $U_1$) ;
-- respecter les contraintes physiques (notamment sur les angles d’Euler) afin de conserver la validité du modèle linéarisé.
+Afin d'obtenir la commande optimale, les auteurs du papier ont utilisé la méthode récursive de Riccati pour résoudre le problème d'optimisation quadratique en temps discret. 
+
+Cependant d'autres méthodes peuvent être utilisées pour determiner la commande optimale, la méthode recursive de Riccati est-elle la plus efficace ?
+
+
+
+
+# Description des objectifs et du plan d'action  
+
+La première objectif du projet consiste à **reproduire le modèle dynamique du drone** puis d'y appliquer **l'algorithme reccursif de Riccati** afin de reproduire les résultats obtenu dans le papier.  
+Ensuite, nous essaierons de résoudre le système avec **d'autres méthodes**, chaque méthode devra minimiser la fonction objectif.
+Les différentes méthodes utilisées sont :   
+- la résolution monolithique via IPOPT (optimisation non linéaire générique),  
+- la résolution avec COSMO (optimisation quadratique conique),  
+- et la résolution avec OSQP (optimisation quadratique à contraintes linéaires).  
+
+Cette comparaison permettra de mettre en évidence les avantages et inconvénients de chaque méthode pour le suivi optimal de trajectoire d’un drone quadrotor tout en déterminant laquelle est la plus efficace pour cette fonction objectif.
+ 
 
 #  Modélisation du système
+
+## Modèle dynamique non linéaire
 
 Dans un premier temps, le système est modélisé de façon dynamique à partir des équations de Newton :
 
@@ -82,6 +99,18 @@ U_1/m
 \end{bmatrix}
 \tag{1}
 \end{equation}
+  
+Avec 
+\begin{equation*}
+LEB =
+\begin{bmatrix}
+\cos(\theta)\cos(\phi) & \sin(\theta)\sin(\phi)\cos(\psi) - \cos(\theta)\sin(\psi) & \cos(\theta)\sin(\phi)\cos(\psi) + \sin(\theta)\sin(\psi) \\
+\cos(\theta)\sin(\phi) & \sin(\theta)\sin(\phi)\sin(\psi) + \cos(\theta)\cos(\psi) & \cos(\theta)\sin(\phi)\sin(\psi) - \sin(\theta)\cos(\psi) \\
+-\sin(\theta)          & \sin(\theta)\cos(\phi)                                   & \cos(\theta)\cos(\phi)
+\end{bmatrix}
+\end{equation*}
+
+
 
 
 - Équations non linéaires pour le mouvement de rotation :
@@ -128,12 +157,10 @@ r
 \tag{3}
 \end{equation}
 
-
+## Modèle dynamique non linéaire simplifié
   
-## Simplification du système
-
-L'hypothèse suivante permet ensuite de simplifier les équations :  
-Si les perturbations par rapport à la condition de vol stationnaire sont faibles, les vitesses angulaires du corps [p; q; r] et les dérivées des angles d’Euler $[\dot{\phi},\ \dot{\theta},\ \dot{\psi}]$ peuvent être considérées comme égales.
+Si les perturbations par rapport à la condition de vol stationnaire sont faibles, on suppose que les vitesses angulaires du corps [p, q, r] et les dérivées des angles d’Euler $[\dot{\phi},\ \dot{\theta},\ \dot{\psi}]$ peuvent être considérées comme égales.  
+On à alors :  
 
 \begin{equation}
 \begin{bmatrix}
@@ -163,7 +190,7 @@ r
 \end{equation}
 
 
-En utilisant l'équation 4 dans l'équation 2, on obtient : 
+En utilisant l'équation 4 dans l'équation 2, on obtient **l'équation d'Euler** : 
 
 \begin{equation}
 \begin{bmatrix}
@@ -188,7 +215,94 @@ En utilisant l'équation 4 dans l'équation 2, on obtient :
 
 ## Linéarisation du modèle dynamique simplifié 
 
-En posant : 
+Pour utiliser l'algorithme LQT en temps discret, il est nécessaire de linéariser le modèle autour d'une condition d'équilibre (vol stationnaire).   
+
+À ce point d’équilibre :
+\begin{equation*}
+\begin{aligned}
+\phi &= \dot{\phi} = \theta = \dot{\theta} = \psi = \dot{\psi} = x = \dot{x} = y = \dot{y} = \dot{z} = 0,\\
+z &= 1~\text{mètre.}
+\end{aligned}
+\end{equation*}
+
+
+ 
+En linéarisant LEB grâce aux hypothèses du vol stationnaire on obtient  : 
+\begin{equation*}
+L_{EB}^{\text{lin}} \approx I_{3}
+\end{equation*}
+
+L'équation de translation (1) devient alors :   
+\begin{equation}
+\begin{bmatrix}
+\ddot{x} \\
+\ddot{y} \\
+\ddot{z}
+\end{bmatrix}
+= 
+-\begin{bmatrix}
+0 \\
+0 \\
+g
+\end{bmatrix}
++ I_{3} \begin{bmatrix}
+0 \\
+0 \\
+U_1/m
+\end{bmatrix}
+\tag{6}
+\end{equation}
+
+De même en vol stationnaire $\dot{\psi} = \dot{\phi} = \dot{\theta} =0$, donc l'équation d'Euler peut s'écrire : 
+\begin{equation}
+\begin{bmatrix}
+\ddot{\phi} \\
+\ddot{\theta} \\
+\ddot{\psi}
+\end{bmatrix}
+=
+\begin{bmatrix}
+\frac{U_2 d}{I_x} \\
+\frac{U_3 d}{I_y} \\
+\frac{U_4}{I_z}
+\end{bmatrix}
+\tag{7}
+\end{equation}
+
+
+Le modèle peut donc se résumer à : 
+\begin{equation}
+\begin{bmatrix}
+\ddot{x} \\
+\ddot{y} \\
+\ddot{z}
+\end{bmatrix}
+= 
+-\begin{bmatrix}
+0 \\
+0 \\
+g
+\end{bmatrix}
++ I_{3} \begin{bmatrix}
+0 \\
+0 \\
+U_1/m
+\end{bmatrix}
+\quad ; \quad
+\begin{bmatrix}
+\ddot{\phi} \\
+\ddot{\theta} \\
+\ddot{\psi}
+\end{bmatrix}
+=
+\begin{bmatrix}
+\frac{U_2 d}{I_x} \\
+\frac{U_3 d}{I_y} \\
+\frac{U_4}{I_z}
+\end{bmatrix}
+\end{equation}
+
+Afin de linéariser le modèle, on introduit X le vecteur d'état, Y le vecteur de sortie et le vecteur de commande U tels que : 
 \begin{equation}
 X =
 \begin{bmatrix}
@@ -214,7 +328,8 @@ U_1 \\ U_2 \\ U_3 \\ U_4
 \tag{6}
 \end{equation}
 
-En linéarisant les équations 1 et 5 autour du vol stationnaire grâce aux hypothèses précédentes on obtient :
+
+Enfin grâce aux hypothèses de vol stationnaire on obtient le modèle linèaire suivant : 
 
 \begin{equation}
 \dot{X} = A X + B U \quad ; \quad Y = C X
@@ -275,26 +390,6 @@ C = I_{12}
   
 
 
-## Discrétisation du temps :  
-On discrétise l'équation 7 avec un pas de temps ts=0,01s, on obtient alors un modèle discret : 
-\begin{equation}
-X(k + 1) = A_d X(k) + B_d U(k) \quad ; \quad Y(k) = C_d X(k)
-\tag{7}
-\end{equation}
-
-La discrétisation des équations continues $\dot{X} = AX + BU$ avec un pas de temps $T_s$ selon la méthode d’Euler (ordre 1) donne les équations discrètes suivantes :
-\begin{equation}
-A_d = I + T_s A
-\quad ; \quad
-B_d = T_s B
-\quad ; \quad
-C_d = C
-\tag{8}
-\end{equation}
-
-Le terme $C_d X(k)$ correspond à la sortie du système observée. Dans notre cas, comme $C_d = I$, cela revient à comparer directement les états à la trajectoire de référence.
-
-
 ## Fonction Performance
 
 La fonction performance est construite de la façon suivante : 
@@ -308,17 +403,41 @@ J = \frac{1}{2} \sum_{k = k_0}^{k_f - 1} \left( \| C_d X(k) - r(k) \|_Q^2 + \| U
 où $\|x\|_M^2 = x^\top M x$ est la norme quadratique pondérée par la matrice $M$, et $F$ est la matrice de coût terminal, souvent choisie égale à $Q$, donc $F = Q$.
 
 
-
-La structure de la fonction $J$ correspond à un problème d'optimisation quadratique, tel qu'étudié dans le cadre du cours sur l'optimisation sans contrainte. En effet, il s'agit de minimiser une somme pondérée d'erreurs quadratiques entre la trajectoire suivie $C_d X(k)$ et la trajectoire de référence $r(k)$, ainsi que des efforts de commande $U(k)$.  
-
-Cependant, plutôt que d'utiliser des méthodes générales comme la descente de gradient ou la méthode de Newton, la solution repose ici sur l'\textit{algorithme récursif de Riccati}.
+La structure de la fonction $J$ correspond à un problème d'optimisation quadratique, tel qu'étudié dans le cadre du cours sur l'optimisation sans contrainte. En effet, il s'agit de minimiser une somme pondérée d'erreurs quadratiques entre la trajectoire suivie $C_d X(k)$ et la trajectoire de référence $r(k)$, ainsi que des efforts de commande $U(k)$ et la différence de position finale.  
 
 La fonction $J$ est une fonction quadratique strictement convexe, car les matrices de pondération $Q$ et $R$ sont définies positives ($Q, R \succ 0$), ce qui garantit l'existence et l'unicité de la solution optimale.
 
+
+
+## Méthode de Riccati
+
 L’algorithme récursif de Riccati permet de résoudre ce problème efficacement sans avoir à inverser une grande matrice globale. Il procède par rétropropagation à partir de l’instant final $k_f$, ce qui est bien adapté aux problèmes de commande optimale sur un horizon fini.
 
+Afin d'appliquer la méthode de Riccati, il est nécessaire de discretiser le temps. 
 
 
+### Discrétisation du temps 
+On discrétise l'équation 7 avec un pas de temps ts=0,01s, on obtient alors un modèle discret : 
+\begin{equation}
+X(k + 1) = A_d X(k) + B_d U(k) \quad ; \quad Y(k) = C_d X(k)
+\tag{7}
+\end{equation}
+
+La discrétisation des équations continues $\dot{X} = AX + BU$ avec un pas de temps $T_s$ selon la méthode d’Euler (ordre 1) donne les équations discrètes suivantes :
+
+\begin{equation}
+A_d = I + T_s A
+\quad ; \quad
+B_d = T_s B
+\quad ; \quad
+C_d = C
+\tag{8}
+\end{equation}
+
+Le terme $C_d X(k)$ correspond à la sortie du système observée. Dans notre cas, comme $C_d = I$, cela revient à comparer directement les états à la trajectoire de référence.
+
+
+### Équation de Riccati
 A l'aide de l'équation de Riccati on obtient l'équation permettant de trouver la solutions du problème discrétisé :
 
 \begin{equation}
@@ -360,38 +479,44 @@ De part les hypothèses faites, les angles doivent être contraints près de 0
 -20^\circ < \theta < 20^\circ \quad ; \quad
 -20^\circ < \psi < 20^\circ
 \tag{10}
-\end{equation}
-
-
+\end{equation} 
 
 
 ```{julia}
+#| output: false
 
 using Pkg
-Pkg.activate("projet_env")    
-Pkg.add("Plots")
-Pkg.add("JuMP")
-Pkg.add("Ipopt")
-Pkg.add("COSMO")
-Pkg.add("IterativeSolvers")
-Pkg.add("LinearMaps")
-Pkg.add("OSQP")
-Pkg.add("MathOptInterface")
+Pkg.activate("projet_env")
+
+# Pkg.add("Plots")
+# Pkg.add("JuMP")
+# Pkg.add("Ipopt")
+# Pkg.add("COSMO")
+# Pkg.add("IterativeSolvers")
+# Pkg.add("LinearMaps")
+# Pkg.add("OSQP")
+# Pkg.add("MathOptInterface")
+Pkg.add("Dates")
+Pkg.add("PrettyTables")
+Pkg.add("DataFrames")
+
+
 ```
 
 
-## Partie 2 : reproduction des résultats
+# Partie 2 : reproduction des résultats
   
 Fonctionnement de l'algorithme :  
 L'algorithme commence à la date finale $k_f$, où les conditions terminales sont imposées, puis il effectue une récursion arrière (backward) sur les matrices $P(k)$ et $g(k)$ jusqu'à l'instant initial $k_0$.  
-Une fois ces matrices calculées, une simulation en avant (forward) permet d’estimer la trajectoire optimale $\bar{X}(k)$ et les commandes optimales $\bar{U}(k)$ en appliquant les gains $L(k)$ et $L_g(k)$ à chaque pas de temps.
+Une fois ces matrices calculées, une simulation en avant (forward) permet d’estimer la trajectoire optimale $\bar{X}(k)$ et les commandes optimales $\bar{U}(k)$.
 
 ```{julia}
 
-using LinearAlgebra 
-using Plots
+using LinearAlgebra, Plots, JuMP, Ipopt, COSMO, IterativeSolvers, LinearMaps, OSQP, MathOptInterface,Dates
+start_time = now()  # début
 
-gr()  # Choix du backend GR pour les graphiques (fiable pour l'export PDF)
+gr()  
+
 g = 9.81  # gravité
 
 # Dimensions système
@@ -402,35 +527,41 @@ Ts = 0.01  # pas de temps (10 ms)
 
 # Paramètres physiques du drone
 mass = 0.5 
-Ix, Iy, Iz = 0.0023, 0.0023, 0.004  # moments d’inertie autour des axes
-
-# Initialisation des matrices A et B pour le modèle linéarisé
-A = zeros(n, n)
-B = zeros(n, m)
-
-# Mise en place de la dynamique : intégrateurs entre position/vitesse/accélération
-for i in 1:2:11
-    A[i, i+1] = 1.0  # lien entre position et vitesse (ex: x, vx)
-end
-
-# Couplage entre angles et accélérations selon la dynamique du drone
-A[8, 3] = g     # acc x dépend de θ
-A[10, 1] = -g   # acc y dépend de φ
-
-# Entrées de commande (forces / moments)
-B[2,2] = 1/Ix   # moment autour de x (φ̈)
-B[4,3] = 1/Iy   # moment autour de y (θ̈)
-B[6,4] = 1/Iz   # moment autour de z (ψ̈)
-B[12,1] = 1/mass  # poussée verticale (z̈)
-
-# Discrétisation d’Euler
-Ad = I + Ts * A
-Bd = Ts * B
+Ix, Iy, Iz = 0.0023, 0.0023, 0.004  # moments d’inertie autour des axes 
 
 # Matrices de coût pour le LQR
 Q = Diagonal([100.0, 50.0, 10.0, 5.0, 0.0, 0.0, 100.0, 1.0, 100.0, 1.0, 1000.0, 0.1])
 R = Diagonal([10.0, 1e-3, 1e-3, 1e-3])  # pondération des efforts de contrôle
 F = Q  # coût terminal
+
+# ================================
+# Construction de A et B
+# ================================
+A = zeros(n, n)
+B = zeros(n, m)
+
+for i in 1:2:11
+    A[i, i+1] = 1.0  # lien entre position et vitesse (ex: x, vx)
+end
+
+
+A[8, 3] = g     # acc x dépend de θ
+A[10, 1] = -g   # acc y dépend de φ
+
+
+B[2,2] = 1/Ix   # moment autour de x (φ̈)
+B[4,3] = 1/Iy   # moment autour de y (θ̈)
+B[6,4] = 1/Iz   # moment autour de z (ψ̈)
+B[12,1] = 1/mass  # poussée verticale (z̈)
+
+
+# ================================
+# Discrétisation d’Euler
+# ================================
+Ad = I + Ts * A
+Bd = Ts * B
+
+
 
 # ================================
 # Définition des trajectoires désirées (référence)
@@ -450,19 +581,19 @@ for k in T÷2+1:T+1
     r[9, k] = 10.0
 end
 
-# z : montée douce de 0 à 20 entre 15s et 30s, puis redescente
+# z : montée douce de 1 à 20 entre 15s et 30s, puis redescente à 1m
 dt = Ts
 t15 = Int(15 / dt)
 t30 = Int(30 / dt)
 
 for k in 1:t15
-    r[11, k] = 0.0
+    r[11, k] = 1.0
 end
 for k in t15+1:t30
-    r[11, k] = 20.0 * ((k - t15) / (t30 - t15))
+    r[11, k] = 1.0 + (20.0 - 1.0) * ((k - t15) / (t30 - t15))
 end
 for k in t30+1:T+1
-    r[11, k] = 20.0 * (1 - (k - t30) / (T + 1 - t30))
+    r[11, k] = 1.0 + (20.0 - 1.0) * (1 - (k - t30) / (T + 1 - t30))
 end
 
 # ================================
@@ -498,6 +629,7 @@ X = zeros(n, T+1)  # états
 U = zeros(m, T)    # commandes
 
 X[:,1] = zeros(n)  # état initial
+X[11, 1] = 1.0     # état initial cohérent
 
 for k in 1:T
     # Calcul des gains à l’instant k
@@ -549,50 +681,90 @@ r_y = r[9, :]
 
 t = Ts .* (0:T)  # temps réel en secondes
 
+J_state1 = 0.0
+J_control1 = 0.0
+for k in 1:T
+    e_k = X[:,k] - r[:,k]
+    J_state1   += 0.5 * (e_k' * Q * e_k)
+    J_control1 += 0.5 * (U[:,k]' * R * U[:,k])
+end
+
+# Coût terminal
+e_final = X[:,T+1] - r[:,T+1]
+J_terminal1 = 0.5 * (e_final' * F * e_final)
+
+# Coût total
+J1 = J_state1 + J_control1 + J_terminal1
+
+end_time = now()  # fin
+
+elapsed = end_time - start_time
+
+println("=== Décomposition de la fonction objectif J ===")
+println("Coût d'état (suivi)      : ", J_state1)
+println("Coût de contrôle         : ", J_control1)
+println("Coût terminal            : ", J_terminal1)
+println("Valeur totale J          : ", J1)
+
+
+
+println("Temps d'exécution total : ", elapsed)
+
 # Création du layout 3 lignes × 2 colonnes
-plt = plot(layout = (3, 2), size=(1000, 800))
+plt1 = plot(layout = (4, 2), size=(1000, 800))
 
 # Trajectoire x
-plot!(plt[1], t, x, lw=2, label="x (suivie)", color=:blue)
-plot!(plt[1], t, r_x, lw=2, label="x (référence)", linestyle=:dash, color=:red)
-plot!(plt[1], title="Trajectoire en x", xlabel="Temps (s)", ylabel="x (m)", legend=:bottomright, grid=true)
+plot!(plt1[1], t, x, lw=2, label="x (suivie)", color=:blue)
+plot!(plt1[1], t, r_x, lw=2, label="x (référence)", linestyle=:dash, color=:red)
+plot!(plt1[1], title="Trajectoire en x", xlabel="Temps (s)", ylabel="x (m)", legend=:bottomright, grid=true)
 
 # Erreur x
-plot!(plt[2], t, e_x, lw=2, label="Erreur x", color=:purple)
-plot!(plt[2], title="Erreur de suivi (x)", xlabel="Temps (s)", ylabel="Erreur (m)", legend=:topright, grid=true)
+plot!(plt1[2], t, e_x, lw=2, label="Erreur x", color=:purple)
+plot!(plt1[2], title="Erreur de suivi (x)", xlabel="Temps (s)", ylabel="Erreur (m)", legend=:topright, grid=true)
 
 # Trajectoire y
-plot!(plt[3], t, y, lw=2, label="y (suivie)", color=:blue)
-plot!(plt[3], t, r_y, lw=2, label="y (référence)", linestyle=:dash, color=:red)
-plot!(plt[3], title="Trajectoire en y", xlabel="Temps (s)", ylabel="y (m)", legend=:bottomright, grid=true)
+plot!(plt1[3], t, y, lw=2, label="y (suivie)", color=:blue)
+plot!(plt1[3], t, r_y, lw=2, label="y (référence)", linestyle=:dash, color=:red)
+plot!(plt1[3], title="Trajectoire en y", xlabel="Temps (s)", ylabel="y (m)", legend=:bottomright, grid=true)
 
 # Erreur y
-plot!(plt[4], t, e_y, lw=2, label="Erreur y", color=:purple)
-plot!(plt[4], title="Erreur de suivi (y)", xlabel="Temps (s)", ylabel="Erreur (m)", legend=:topright, grid=true)
+plot!(plt1[4], t, e_y, lw=2, label="Erreur y", color=:purple)
+plot!(plt1[4], title="Erreur de suivi (y)", xlabel="Temps (s)", ylabel="Erreur (m)", legend=:topright, grid=true)
 
 # Trajectoire z
-plot!(plt[5], t, z, lw=2, label="z (suivie)", color=:blue)
-plot!(plt[5], t, r_z, lw=2, label="z (référence)", linestyle=:dash, color=:red)
-plot!(plt[5], title="Trajectoire en z", xlabel="Temps (s)", ylabel="z (m)", legend=:bottomright, grid=true)
+plot!(plt1[5], t, z, lw=2, label="z (suivie)", color=:blue)
+plot!(plt1[5], t, r_z, lw=2, label="z (référence)", linestyle=:dash, color=:red)
+plot!(plt1[5], title="Trajectoire en z", xlabel="Temps (s)", ylabel="z (m)", legend=:bottomright, grid=true)
 
 # Erreur z
-plot!(plt[6], t, e_z, lw=2, label="Erreur z", color=:purple)
-plot!(plt[6], title="Erreur de suivi (z)", xlabel="Temps (s)", ylabel="Erreur (m)", legend=:topright, grid=true)
+plot!(plt1[6], t, e_z, lw=2, label="Erreur z", color=:purple)
+plot!(plt1[6], title="Erreur de suivi (z)", xlabel="Temps (s)", ylabel="Erreur (m)", legend=:topright, grid=true)
+
+plot!(plt1[7], t[1:end-1], U[1,:], lw=2, label="u1", color=:blue)
+plot!(plt1[7], t[1:end-1], U[2,:], lw=2, label="u2", color=:red)
+plot!(plt1[7], t[1:end-1], U[3,:], lw=2, label="u3", color=:green)
+plot!(plt1[7], t[1:end-1], U[4,:], lw=2, label="u4", color=:orange)
+plot!(plt1[7], title="Commandes moteurs", xlabel="Temps (s)", ylabel="U", legend=:topright, grid=true)
 
 # Affichage
-display(plt)
+display(plt1)
 ```
 
 
+La valeur de la fonction objectif est de 2,27*10^5. On remarque sur les graphiques que la trajectoire est plutot bien respectée avec de faibles erreurs de suivis.
+La fonction objectif comporte 3 parties, une partie suivie, une partie contrôle et une partie coût position finale. On constate que la partie suivi participe pour beaucoup à la fonction objectif (99,5%).
 
-## partie 3
+
+## partie 3 : résolution avec Ipopt
 
 Le but de cette section est de comparer les résultats obtenus dans la Partie 2 avec des résultats venant de stratégies plus générique
 comme par exemple IPOPT. Le modèle est construit à partir de la librairie JuMP. 
 
 
 ```{julia}
-using JuMP, Ipopt
+Pkg.add("JuMP")
+
+using LinearAlgebra, Plots, JuMP, Ipopt, COSMO, IterativeSolvers, LinearMaps, OSQP, MathOptInterface
 
 
 x0 = zeros(n)
@@ -641,6 +813,33 @@ println("Objective value : ", objective_value(model))
 # ================================
 # Visualisation de la trajectoire et de l’erreur
 # ================================
+
+X_val = value.(X)
+U_val = value.(U)
+
+J_state2   = 0.0
+J_control2 = 0.0
+
+for k in 1:T
+    e_k = X_val[:,k] - r[:,k]
+    J_state2 += 0.5 * (e_k' * Q * e_k)[1]
+end
+
+for k in 0:T-1
+    J_control2 += 0.5 * (U_val[:,k]' * R * U_val[:,k])[1]
+end
+
+e_final = X_val[:,T] - r[:,T+1]
+J_terminal2 = 0.5 * (e_final' * F * e_final)[1]
+
+J2 = J_state2 + J_control2 + J_terminal2
+
+println("\n--- Décomposition du coût : Modèle 2 ---")
+println("J_state2    = ", J_state2)
+println("J_control2  = ", J_control2)
+println("J_terminal2 = ", J_terminal2)
+println("J2 total    = ", J2)
+
 
 solutionX = Array(value.(X))
 
@@ -703,20 +902,18 @@ display(plt2)
 
 ```
 
-# Analyse des résultats
+## Analyse des résultats
 
 La méthode IPOPT converge belle et bien pour ce problème et on obtient une valeur de l'objectif de 1.230511402197558e8. Il est possible de faire mieux avec des méthodes utilisant les propriétés du problème. Deux exemples de ces méthodes seront visités dans la prochaine section. Notons que la convergence a été atteinte en 4000 itérations pour un temps de 1.63e+001 secondes. On observe sur les graphiques que la solution proposée est efficace, en ce sens que le trajet à suivre est assez bien respectés. Notons que les erreurs sont plus grandes autour des points où il y a un changement dans la dérivée. Notre approximation étant une fonction lisse, cela n'est pas étonnant. L'erreur est aussi grande au temps final, ce qui peut être un problème dépendament des applications. Un grand déplacement programmé comme une somme de petites trajectoires pourrait facilement accumuler des erreurs.
 
 
 
 
-## Partie 4
-
-# Résolution avec le solver COSMO
+# Partie 4 : Résolution avec le solver COSMO
 
 Le solveur COSMO implémente le **Conic operator splitting method **, qui est particulièrement adaptée pour résoudre de larges problèmes d'optimisation convexe et conique dont l'objectif est donné par une fonction quadratique. Il s'agit donc d'une méthode adaptée au problème monolithique creux. Le modèle est encore une fois construit à l'aide de la librairie JuMP.
 ```{julia}
-using COSMO, IterativeSolvers, LinearMaps, OSQP, MathOptInterface
+using JuMP, COSMO, IterativeSolvers, LinearMaps, OSQP, MathOptInterface, Plots
 
 model3 = Model(COSMO.Optimizer)
 
@@ -754,11 +951,44 @@ set_start_value.(U, 0.0)
 
 optimize!(model3)
 println("Status          : ", termination_status(model3))
-println("Objective value : ", objective_value(model3))
 
 # ================================
 # Visualisation de la trajectoire et de l’erreur
 # ================================
+
+X_val = value.(X)
+U_val = value.(U)
+
+J_state3   = 0.0
+J_control3 = 0.0
+
+# Coût d'état
+for k in 1:T
+    e_k = X_val[:,k] - r[:,k]
+    J_state3 += 0.5 * (e_k' * Q * e_k)[1]
+end
+
+# Coût de contrôle
+for k in 0:T-1
+    J_control3 += 0.5 * (U_val[:,k]' * R * U_val[:,k])[1]
+end
+
+# Coût terminal
+e_final = X_val[:,T] - r[:,T+1]
+J_terminal3 = 0.5 * (e_final' * F * e_final)[1]
+
+# Coût total
+J3 = J_state3 + J_control3 + J_terminal3
+
+println("\n--- Décomposition du coût ---")
+println("J_state3    = ", J_state3)
+println("J_control3  = ", J_control3)
+println("J_terminal3 = ", J_terminal3)
+println("J3 total    = ", J3)
+
+
+
+
 
 solutionX = Array(value.(X))
 
@@ -821,14 +1051,16 @@ display(plt3)
 
 
 ```
-# Analyse des résultats
+
+## Analyse des résultats
 
 La méthode ne parvient pas à converger en moins de 5000 itérations. Toutefois, on constate une amélioration de la valeur de l'objectif qui est 10x plus petite que celle obtenue via Ipopt. Le temps de calcul est toutefois beaucoup plus élevé et on en déduit que cette méthode a une plus grande complexité que l'algorithme précédent. Comme le nombre de variable est différent que dans le problème formulé et présenté dans l'article, il est difficile de comparer la complexité des deux algorithmes. Lorsque le temps de calcul est limité, il est toutefois préférable d'utiliser la méthode présentée dans l'article. Les graphes présentes une erreur qui est encore une fois espectable. On observe par aiileurs que la trajectoire en y est bien meilleure avec COSMO qu'avec Ipopt. Encore une fois, on observe de plus grandes erreurs là où il y a des changements dans la valeur des dérivées de la trajectoire à suivre. Bien que la valeur optimale obtenue via COSMO soit bonne, il est possible de faire mieux avec le solveur OSQP.
 
-# Résolution avec le solver OSQP
+# Partie 5 : Résolution avec le solver OSQP
 
 OSQP (Operator Splitting Quadratic Program) est une méthode servant a résoudre des problème quadratique à contraintes linéaires. C'est exactement les propriétés que nous souhaitons exploiter pour le problème monolithique.
-```{julia}
+ ```{julia}
+using LinearAlgebra, Plots, JuMP, Ipopt, COSMO, IterativeSolvers, LinearMaps, OSQP, MathOptInterface
 
 model2 = Model(OSQP.Optimizer)
 set_optimizer_attribute(model, "print_level", 1)
@@ -872,6 +1104,32 @@ println("Objective value : ", objective_value(model2))
 # ================================
 # Visualisation de la trajectoire et de l’erreur
 # ================================
+
+X_val = value.(X)
+U_val = value.(U)
+
+J_state4   = 0.0
+J_control4 = 0.0
+
+for k in 1:T
+    e_k = X_val[:,k] - r[:,k]
+    J_state4 += 0.5 * (e_k' * Q * e_k)[1]
+end
+
+for k in 0:T-1
+    J_control4 += 0.5 * (U_val[:,k]' * R * U_val[:,k])[1]
+end
+
+e_final = X_val[:,T] - r[:,T+1]
+J_terminal4 = 0.5 * (e_final' * F * e_final)[1]
+
+J4 = J_state4 + J_control4 + J_terminal4
+
+println("\n--- Décomposition du coût : Modèle 4 ---")
+println("J_state4    = ", J_state4)
+println("J_control4  = ", J_control4)
+println("J_terminal4 = ", J_terminal4)
+println("J4 total    = ", J4)
 
 solutionX = Array(value.(X))
 
@@ -934,11 +1192,52 @@ display(plt4)
 
 ```
 
-# Analyse des résultats 
+## Analyse des résultats 
 
 Notons que cette méthode est bien plus efficace que Ipopt et COSMO. La trajectoire désirée est en général mieux approximée, le temps de calcul est meilleur que COSMO en restant très proche de celui d'Ipopt. De plus, la valeur optimale de l'objectif est dix fois plus petite que pour COSMO et cent fois plus petite qu'Ipopt. Cette méthode est donc à privilégier par rapport aux deux méthodes précédentes.
+
+
+#Description de ce qui à été réalisé
+
+Nous avons reproduit les résultats du papier puis tester différentes méthodes de résolution pour la même trajectoire demandée. 
+Cela nous permets de comparer les méthodes sur leurs performances par rapport à la fonction objectif mais aussi par rapport au temps de calcul.
+
+Les résultats sont résumé dans le tableau ci-dessous :   
+## Résultats Comparatifs des 4 Modèles
+
+```{julia}
+using PrettyTables
+
+modeles = ["Modèle de Riccati", "Ipopt", "Cosmo", "OSQP"]
+
+# Exemples de valeurs (remplace-les)
+temps_sec = [0.811, 1.243, 0.400, 0.950]
+J_state   = [J_state1, J_state2, J_state3, J_state4]
+J_control = [J_control1, J_control2, J_control3, J_control4]
+J_terminal= [J_terminal1, J_terminal2, J_terminal3, J_terminal4]
+J_total   = J_state .+ J_control .+ J_terminal
+
+data = hcat(
+    modeles,
+    round.(temps_sec, digits=3),
+    round.(J_state, digits=3),
+    round.(J_control, digits=3),
+    round.(J_terminal, digits=3),
+    round.(J_total, digits=3)
+)
+
+header = ["Modèle", "Temps (s)", "J_state", "J_control", "J_terminal", "J_total"]
+
+println(pretty_table(String, data; header=header))
+
+```
+
+# Difficultés rencontrées
+
+# Prochaines étapes 
+
+Les prochaines étapes pourraient être de tester différentes chemin à suivre afin de determiner si certaines méthodes sont plus efficaces que d'autres en fonction des conditions.
 
 ## Lien Github
 
 https://github.com/joey-van-melle/MTH8408_Optimal-Path-Tracking
-
