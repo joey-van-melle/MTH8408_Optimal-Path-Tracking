@@ -65,13 +65,35 @@ la phase 3.
 
 Dans un premier temps, le système est modélisé de façon dynamique à partir des équations de Newton :
 
-- **Dynamique translationnelle** : influencée par la poussée verticale $U_1$ et les angles $\phi, \theta$ ;
-- **Dynamique rotationnelle** : influencée par les couples de commande $U_2, U_3, U_4$.  
-  
+- **Dynamique translationnelle** : influencée par la poussée verticale $U_1$ et les angles $\phi, \theta$ ;  
+-Où $\phi$ et $\theta$ sont respectivement les angles de roulis et de tangage
+
+- **Dynamique rotationnelle** : influencée par les couples de commande $U_2, U_3, U_4$.
+
+Dans le modèle dynamique du quadrotor, les quatre entrées de commande $U_1$, $U_2$, $U_3$ et $U_4$ correspondent aux forces et couples générés par les quatre rotors :
+\begin{align}
+    U_1 &= F_1 + F_2 + F_3 + F_4 
+    &&\text{(force totale générée par les quatre rotors, liée à la poussée verticale)} \\
+    U_2 &= F_4 - F_2 
+    &&\text{(couple de roulis, contrôle l’angle de roulis $\phi$)} \\
+    U_3 &= F_3 - F_1 
+    &&\text{(couple de tangage, contrôle l’angle de tangage $\theta$)} \\
+    U_4 &= T_2 + T_4 - T_1 - T_3 
+    &&\text{(couple de lacet, contrôle l’angle de lacet $\psi$)}
+\end{align}
+
+où $F_i$ représente la force générée par le $i$-ème rotor et $T_i$ le couple associé. 
+
+Ainsi :
+- $U_1$ agit principalement sur la \textbf{poussée verticale} et donc l'altitude.  
+- $U_2$ contrôle le \textbf{roulis} (\emph{roll}) autour de l'axe $x$.  
+- $U_3$ contrôle le \textbf{tangage} (\emph{pitch}) autour de l'axe $y$.  
+- $U_4$ contrôle le \textbf{lacet} (\emph{yaw}) autour de l'axe $z$.  
+    
   
 Le modèle dynamique est constitué de deux parties :
 
-- Équation non linéaire pour le mouvement de translation :
+- **Équation non linéaire pour le mouvement de translation :**
 
 \begin{equation}
 \begin{bmatrix}
@@ -114,8 +136,8 @@ LEB =
 
 
 
-- Équations non linéaires pour le mouvement de rotation :
-
+**- Équations non linéaires pour le mouvement de rotation :
+**
 \begin{equation}
 \begin{bmatrix}
 \dot{p} \\
@@ -213,6 +235,8 @@ En utilisant l'équation 4 dans l'équation 2, on obtient **l'équation d'Euler*
 \end{bmatrix}
 \tag{5}
 \end{equation}
+
+
 
 ## Linéarisation du modèle dynamique simplifié 
 
@@ -403,6 +427,41 @@ J = \frac{1}{2} \sum_{k = k_0}^{k_f - 1} \left( \| C_d X(k) - r(k) \|_Q^2 + \| U
 
 où $\|x\|_M^2 = x^\top M x$ est la norme quadratique pondérée par la matrice $M$, et $F$ est la matrice de coût terminal, souvent choisie égale à $Q$, donc $F = Q$.
 
+\begin{equation}
+Q =
+\left[
+\begin{array}{cccccccccccc}
+100 & 0   & 0   & 0   & 0   & 0   & 0   & 0   & 0   & 0   & 0     & 0 \\
+0   & 50  & 0   & 0   & 0   & 0   & 0   & 0   & 0   & 0   & 0     & 0 \\
+0   & 0   & 10  & 0   & 0   & 0   & 0   & 0   & 0   & 0   & 0     & 0 \\
+0   & 0   & 0   & 5   & 0   & 0   & 0   & 0   & 0   & 0   & 0     & 0 \\
+0   & 0   & 0   & 0   & 0   & 0   & 0   & 0   & 0   & 0   & 0     & 0 \\
+0   & 0   & 0   & 0   & 0   & 0   & 0   & 0   & 0   & 0   & 0     & 0 \\
+0   & 0   & 0   & 0   & 0   & 0   & 100 & 0   & 0   & 0   & 0     & 0 \\
+0   & 0   & 0   & 0   & 0   & 0   & 0   & 1   & 0   & 0   & 0     & 0 \\
+0   & 0   & 0   & 0   & 0   & 0   & 0   & 0   & 100 & 0   & 0     & 0 \\
+0   & 0   & 0   & 0   & 0   & 0   & 0   & 0   & 0   & 1   & 0     & 0 \\
+0   & 0   & 0   & 0   & 0   & 0   & 0   & 0   & 0   & 0   & 1000  & 0 \\
+0   & 0   & 0   & 0   & 0   & 0   & 0   & 0   & 0   & 0   & 0     & 0.1
+\end{array}
+\right]
+\tag{Q}
+\end{equation}
+
+\begin{equation}
+R =
+\left[
+\begin{array}{cccc}
+10 & 0 & 0 & 0 \\
+0  & 0 & 0 & 0 \\
+0  & 0 & 0 & 0 \\
+0  & 0 & 0 & 0
+\end{array}
+\right]
+\tag{R}
+\end{equation}
+
+
 
 La structure de la fonction $J$ correspond à un problème d'optimisation quadratique, tel qu'étudié dans le cadre du cours sur l'optimisation sans contrainte. En effet, il s'agit de minimiser une somme pondérée d'erreurs quadratiques entre la trajectoire suivie $C_d X(k)$ et la trajectoire de référence $r(k)$, ainsi que des efforts de commande $U(k)$ et la différence de position finale.  
 
@@ -474,13 +533,14 @@ R = \operatorname{diag}(10,\ 0,\ 0,\ 0)
 \tag{9}
 \end{equation}
 
-De part les hypothèses faites, les angles doivent être contraints près de 0
+De part les hypothèses faites, les angles doivent être contraints près de 0 :
 \begin{equation}
--20^\circ < \phi < 20^\circ \quad ; \quad
--20^\circ < \theta < 20^\circ \quad ; \quad
--20^\circ < \psi < 20^\circ
+-20^\circ \leq \phi \leq 20^\circ \quad ; \quad
+-20^\circ \leq \theta \leq 20^\circ \quad ; \quad
+-20^\circ \leq \psi \leq 20^\circ
 \tag{10}
-\end{equation} 
+\end{equation}
+
 
 
 ```{julia}
@@ -493,12 +553,12 @@ De part les hypothèses faites, les angles doivent être contraints près de 0
 using Pkg
 Pkg.activate("projet_env")
 
-Pkg.add("Plots")
+# Pkg.add("Plots")
 Pkg.add("JuMP")
-Pkg.add("Ipopt")
-Pkg.add("COSMO")
-Pkg.add("IterativeSolvers")
-Pkg.add("LinearMaps")
+ Pkg.add("Ipopt")
+ Pkg.add("COSMO")
+ Pkg.add("IterativeSolvers")
+ Pkg.add("LinearMaps")
 Pkg.add("OSQP")
 Pkg.add("MathOptInterface")
 Pkg.add("Dates")
@@ -518,79 +578,53 @@ Une fois ces matrices calculées, une simulation en avant (forward) permet d’e
 ```{julia}
 
 using LinearAlgebra, Plots, JuMP, Ipopt, COSMO, IterativeSolvers, LinearMaps, OSQP, MathOptInterface,Dates
-start_time = now()  # début
+start_time = now()
+gr()
 
-gr()  
+g = 9.81
+n = 12; m = 4
+T = 6000
+Ts = 0.01
 
-g = 9.81  # gravité
+mass = 0.5
+Ix, Iy, Iz = 0.0023, 0.0023, 0.004
 
-# Dimensions système
-n = 12  # nombre d'états du drone
-m = 4   # nombre d'entrées de contrôle
-T = 6000  # durée de la simulation (en pas de temps)
-Ts = 0.01  # pas de temps (10 ms)
-
-# Paramètres physiques du drone
-mass = 0.5 
-Ix, Iy, Iz = 0.0023, 0.0023, 0.004  # moments d’inertie autour des axes 
-
-# Matrices de coût pour le LQR
 Q = Diagonal([100.0, 50.0, 10.0, 5.0, 0.0, 0.0, 100.0, 1.0, 100.0, 1.0, 1000.0, 0.1])
-R = Diagonal([10.0, 1e-3, 1e-3, 1e-3])  # pondération des efforts de contrôle
-F = Q  # coût terminal
+R = Diagonal([10.0, 1e-3, 1e-3, 1e-3])
+F = Q
 
-# ================================
-# Construction de A et B
-# ================================
-A = zeros(n, n)
-B = zeros(n, m)
-
+# --- A, B
+A = zeros(n, n); B = zeros(n, m)
 for i in 1:2:11
-    A[i, i+1] = 1.0  # lien entre position et vitesse (ex: x, vx)
+    A[i, i+1] = 1.0
 end
+A[8, 3]  = g        # ẍ = g θ
+A[10, 1] = -g       # ÿ = -g φ
+B[2,2]   = 1/Ix     # φ̈
+B[4,3]   = 1/Iy     # θ̈
+B[6,4]   = 1/Iz     # ψ̈
+B[12,1]  = 1/mass   # z̈ = u1/m - g
 
-
-A[8, 3] = g     # acc x dépend de θ
-A[10, 1] = -g   # acc y dépend de φ
-
-
-B[2,2] = 1/Ix   # moment autour de x (φ̈)
-B[4,3] = 1/Iy   # moment autour de y (θ̈)
-B[6,4] = 1/Iz   # moment autour de z (ψ̈)
-B[12,1] = 1/mass  # poussée verticale (z̈)
-
-
-# ================================
-# Discrétisation d’Euler
-# ================================
+# --- Discrétisation d’Euler
 Ad = I + Ts * A
 Bd = Ts * B
 
+# --- BIAIS AFFINE GRAVITÉ pour ż  (Δż = Ts*(u1/m - g))
+c = zeros(n)
+c[12] = -Ts * g      # <-- ajouté
 
-
-# ================================
-# Définition des trajectoires désirées (référence)
-# ================================
+# --- Références (inchangé)
 r = zeros(n, T+1)
-
-# x : montée puis descente linéaire
 for k in 1:T÷2
     r[7, k] = 40.0 * (k / (T÷2))
 end
 for k in T÷2+1:T+1
     r[7, k] = 40.0 * (1 - (k - T÷2) / (T÷2))
 end
-
-# y : reste à 0, saute brusquement à 10 après la moitié du temps
 for k in T÷2+1:T+1
     r[9, k] = 10.0
 end
-
-# z : montée douce de 1 à 20 entre 15s et 30s, puis redescente à 1m
-dt = Ts
-t15 = Int(15 / dt)
-t30 = Int(30 / dt)
-
+dt = Ts; t15 = Int(15/dt); t30 = Int(30/dt)
 for k in 1:t15
     r[11, k] = 1.0
 end
@@ -601,108 +635,132 @@ for k in t30+1:T+1
     r[11, k] = 1.0 + (20.0 - 1.0) * (1 - (k - t30) / (T + 1 - t30))
 end
 
-# ================================
-# Calcul backward des gains LQR (formulation récursive de Riccati)
-# ================================
-
-# Allocation des vecteurs/matrices pour les gains
-P = Vector{Matrix{Float64}}(undef, T+1)  # matrices de Riccati
-G = Vector{Vector{Float64}}(undef, T+1)  # terme d’offset (trajectoire r)
-L = Vector{Matrix{Float64}}(undef, T)    # gain de feedback état
-Lg = Vector{Matrix{Float64}}(undef, T)   # gain associé à la référence
-
-# Conditions terminales
-C = I(n)  # matrice d'observation (identité ici)
+# --- Riccati backward (inchangé)
+P = Vector{Matrix{Float64}}(undef, T+1)
+G = Vector{Vector{Float64}}(undef, T+1)
+L = Vector{Matrix{Float64}}(undef, T)
+Lg = Vector{Matrix{Float64}}(undef, T)
+C = I(n)
 P[T+1] = C' * Q * C
 G[T+1] = C' * Q * r[:, T+1]
 
-# Recursion backward Riccati
-for k in T:-1:1
-    E = Bd * inv(R) * Bd'
-    V = C' * Q * C
-    invIplusE = inv(I + E * P[k+1])
+V = C' * Q * C                      # calculé une seule fois
+BdR = R \ Bd'                       # pré-calcul pour E
+E = Bd * BdR                        # équivalent à Bd * inv(R) * Bd'
 
+for k in T:-1:1
+    invIplusE = inv(I + E * P[k+1])     # on garde l’inverse ici
     P[k] = Ad' * P[k+1] * invIplusE * Ad + V
     G[k] = (Ad' - Ad' * P[k+1] * invIplusE * E) * G[k+1] + C' * Q * r[:, k]
 end
 
-# ================================
-# Simulation forward du système contrôlé
-# ================================
+#--- projection sur une boîte (vectorielle)
+proj_box(y, lb, ub) = clamp.(y, lb, ub)
 
-X = zeros(n, T+1)  # états
-U = zeros(m, T)    # commandes
+# --- une étape de gradient projeté sur (φ, θ, ψ)
+# PGD sur (φ,θ,ψ) avec Armijo projeté sur le coût V(x)=1/2 (x-r)' P (x-r)
+using LinearAlgebra: opnorm, dot
 
-X[:,1] = zeros(n)  # état initial
-X[11, 1] = 1.0     # état initial cohérent
+function pgd_angles_value_armijo!(
+    xtrial::Vector{Float64},         # état candidat x_{k+1} (sera modifié sur les 3 angles)
+    rcol::Vector{Float64},           # référence r_{k+1}
+    Pnext::Matrix{Float64},          # P_{k+1}
+    idx::Vector{Int},                # indices des angles [1,3,5]
+    lb::Vector{Float64}, ub::Vector{Float64};  # bornes angles
+    eta0::Union{Nothing,Float64}=nothing,
+    beta::Float64=0.5,               # facteur de réduction
+    c1::Float64=1e-4,                # constante d’Armijo
+    max_bt::Int=20
+)
+    # Erreur et gradient complet
+    e      = xtrial .- rcol                  # e = x - r
+    gfull  = Pnext * e                       # ∇_x V = P e
+    gang   = gfull[idx]                      # gradient restreint aux angles
 
-for k in 1:T
-    # Calcul des gains à l’instant k
-    L[k] = inv(R + Bd' * P[k+1] * Bd) * Bd' * P[k+1] * Ad
-    Lg[k] = inv(R + Bd' * P[k+1] * Bd) * Bd'
+    # Si aucun signal utile sur les angles, sortir
+    if all(iszero, gang)
+        return
+    end
 
-    # Calcul de la commande optimale
-    U[:,k] = -L[k] * X[:,k] + Lg[k] * G[k+1]
+    # Pas initial sûr via 1/||P_aa||_2
+    Paa = Pnext[idx, idx]
+    L   = max(opnorm(Paa), 1e-8)
+    η   = isnothing(eta0) ? (1.0 / L) : eta0
 
-    # Propagation de l'état
-    X[:,k+1] = Ad * X[:,k] + Bd * U[:,k]
+    a0   = xtrial[idx]                       # angles courants
+    f0   = 0.5 * dot(e, Pnext * e)           # V(x)
 
-    # Contraintes physiques : angles d'attitude max (20°)
-    phi_max = deg2rad(20)
-    theta_max = deg2rad(20)
-    psi_max = deg2rad(20)
+    # Backtracking projeté (condition classique : f(new) ≤ f0 - (c1/η) ||a_new - a0||^2)
+    a_new = similar(a0)
+    for _ in 1:max_bt
+        a_new .= proj_box(a0 .- η .* gang, lb, ub)
+        d  = a0 .- a_new
+        if iszero(norm(d))     # déjà fixe/projeté
+            break
+        end
+        # Construire e_new en ne modifiant QUE les composantes angles
+        e_new      = copy(e)
+        e_new[idx] = a_new .- rcol[idx]
+        f_new = 0.5 * dot(e_new, Pnext * e_new)
 
-    # contraintex des angles
-    X[1,k+1] = clamp(X[1,k+1], -phi_max, phi_max)
-    X[3,k+1] = clamp(X[3,k+1], -theta_max, theta_max)
-    X[5,k+1] = clamp(X[5,k+1], -psi_max, psi_max)
+        if f_new <= f0 - (c1/η) * dot(d, d)
+            # Accepté
+            xtrial[idx] .= a_new
+            return
+        end
+        η *= beta
+    end
+
+    # Si non accepté après max_bt, on applique quand même la dernière tentative
+    xtrial[idx] .= a_new
+    return
 end
 
-# ================================
-# Visualisation de la trajectoire et de l’erreur
-# ================================
+# === Simulation forward (avec gravité, projection d’angles et saturation u1) ===
+X = zeros(n, T+1)
+U = zeros(m, T)
+X[:,1] = zeros(n); X[11,1] = 1.0
 
-z = X[11, :]  # position verticale
-x = X[7, :]   # position x
-y = X[9, :]   # position y
+phi_max   = deg2rad(20.0)
+theta_max = deg2rad(20.0)
+psi_max   = deg2rad(20.0)
 
-# Erreurs de suivi
-e_z = z .- r[11, :]
-e_x = x .- r[7, :]
-e_y = y .- r[9, :]
-z = X[11, :]  # position verticale
-x = X[7, :]   # position x
-y = X[9, :]   # position y
+idx_ang = [1, 3, 5]                                       # indices φ, θ, ψ
+q_ang   = (Q[1,1], Q[3,3], Q[5,5])                        # poids dans Q
+lb_ang  = [-phi_max, -theta_max, -psi_max]
+ub_ang  = [ phi_max,  theta_max,  psi_max]
 
-# Erreurs de suivi
-e_z = z .- r[11, :]
-e_x = x .- r[7, :]
-e_y = y .- r[9, :]
+for k in 1:T
+    Lg[k] = inv(R + Bd' * P[k+1] * Bd) * Bd'
+    L[k]  = Lg[k] * P[k+1] * Ad
+    
 
-# Références
-r_z = r[11, :]
-r_x = r[7, :]
-r_y = r[9, :]
+    # commande (sans intégrateur) + saturation poussée
+    U[:,k] = -L[k] * X[:,k] + Lg[k] * G[k+1]
+    U[1,k] = clamp(U[1,k], 0.0, 2*mass*g)         # <-- borne physique sur u1
 
-t = Ts .* (0:T)  # temps réel en secondes
+    # propagation avec gravité (affine)
+    xtrial  = Ad * X[:,k] + Bd * U[:,k] + c      # <-- + c
 
-J_state1 = 0.0
-J_control1 = 0.0
+     # ---- étape de GRADIENT PROJETÉ sur les 3 angles uniquement
+    pgd_angles_value_armijo!(xtrial, r[:,k+1], P[k+1], idx_ang, lb_ang, ub_ang;
+                         eta0=nothing, beta=0.5, c1=1e-4, max_bt=20)
+
+    X[:,k+1] = xtrial
+end
+
+# === Coûts (fix: extraire scalaire avec [1])
+J_state1 = 0.0; J_control1 = 0.0
 for k in 1:T
     e_k = X[:,k] - r[:,k]
-    J_state1   += 0.5 * (e_k' * Q * e_k)
-    J_control1 += 0.5 * (U[:,k]' * R * U[:,k])
+    J_state1   += 0.5 * (e_k' * Q * e_k)[1]       # <-- [1]
+    J_control1 += 0.5 * (U[:,k]' * R * U[:,k])[1] # <-- [1]
 end
-
-# Coût terminal
 e_final = X[:,T+1] - r[:,T+1]
-J_terminal1 = 0.5 * (e_final' * F * e_final)
-
-# Coût total
+J_terminal1 = 0.5 * (e_final' * F * e_final)[1]   # <-- [1]
 J1 = J_state1 + J_control1 + J_terminal1
 
-end_time = now()  # fin
-
+end_time = now()
 elapsed = end_time - start_time
 
 println("=== Décomposition de la fonction objectif J ===")
@@ -710,48 +768,46 @@ println("Coût d'état (suivi)      : ", J_state1)
 println("Coût de contrôle         : ", J_control1)
 println("Coût terminal            : ", J_terminal1)
 println("Valeur totale J          : ", J1)
+println("Temps d'exécution total  : ", elapsed)
 
+# === Tracés
+z = X[11,:]; x = X[7,:]; y = X[9,:]
+r_z = r[11,:]; r_x = r[7,:]; r_y = r[9,:]
+e_z = z .- r_z; e_x = x .- r_x; e_y = y .- r_y
+t = Ts .* (0:T)
 
-
-println("Temps d'exécution total : ", elapsed)
-
-# Création du layout 3 lignes × 2 colonnes
-plt1 = plot(layout = (4, 2), size=(1000, 800))
-
-# Trajectoire x
-plot!(plt1[1], t, x, lw=2, label="x (suivie)", color=:blue)
+plt1 = plot(layout=(4,2), size=(1000,800))
+plot!(plt1[1], t, x,   lw=2, label="x (suivie)")
 plot!(plt1[1], t, r_x, lw=2, label="x (référence)", linestyle=:dash, color=:red)
 plot!(plt1[1], title="Trajectoire en x", xlabel="Temps (s)", ylabel="x (m)", legend=:bottomright, grid=true)
 
-# Erreur x
 plot!(plt1[2], t, e_x, lw=2, label="Erreur x", color=:purple)
 plot!(plt1[2], title="Erreur de suivi (x)", xlabel="Temps (s)", ylabel="Erreur (m)", legend=:topright, grid=true)
 
-# Trajectoire y
-plot!(plt1[3], t, y, lw=2, label="y (suivie)", color=:blue)
+plot!(plt1[3], t, y,   lw=2, label="y (suivie)")
 plot!(plt1[3], t, r_y, lw=2, label="y (référence)", linestyle=:dash, color=:red)
 plot!(plt1[3], title="Trajectoire en y", xlabel="Temps (s)", ylabel="y (m)", legend=:bottomright, grid=true)
 
-# Erreur y
 plot!(plt1[4], t, e_y, lw=2, label="Erreur y", color=:purple)
 plot!(plt1[4], title="Erreur de suivi (y)", xlabel="Temps (s)", ylabel="Erreur (m)", legend=:topright, grid=true)
 
-# Trajectoire z
-plot!(plt1[5], t, z, lw=2, label="z (suivie)", color=:blue)
+plot!(plt1[5], t, z,   lw=2, label="z (suivie)")
 plot!(plt1[5], t, r_z, lw=2, label="z (référence)", linestyle=:dash, color=:red)
 plot!(plt1[5], title="Trajectoire en z", xlabel="Temps (s)", ylabel="z (m)", legend=:bottomright, grid=true)
 
-# Erreur z
 plot!(plt1[6], t, e_z, lw=2, label="Erreur z", color=:purple)
 plot!(plt1[6], title="Erreur de suivi (z)", xlabel="Temps (s)", ylabel="Erreur (m)", legend=:topright, grid=true)
 
-plot!(plt1[7], t[1:end-1], U[1,:], lw=2, label="u1", color=:blue)
-plot!(plt1[7], t[1:end-1], U[2,:], lw=2, label="u2", color=:red)
-plot!(plt1[7], t[1:end-1], U[3,:], lw=2, label="u3", color=:green)
-plot!(plt1[7], t[1:end-1], U[4,:], lw=2, label="u4", color=:orange)
-plot!(plt1[7], title="Commandes moteurs", xlabel="Temps (s)", ylabel="U", legend=:topright, grid=true)
+# Panel 7 : u1 (poussée) – échelle N
+plot!(plt1[7], t[1:end-1], U[1,:], lw=2, label="u1 (N)", grid=true)
+plot!(plt1[7], title="Poussée u1", xlabel="Temps (s)", ylabel="N", legend=:topright)
 
-# Affichage
+# Panel 8 : u2–u4 (couples) – échelle Nm
+plot!(plt1[8], t[1:end-1], U[2,:], lw=2, label="u2 (Nm)")
+plot!(plt1[8], t[1:end-1], U[3,:], lw=2, label="u3 (Nm)")
+plot!(plt1[8], t[1:end-1], U[4,:], lw=2, label="u4 (Nm)")
+plot!(plt1[8], title="Couples u2–u4", xlabel="Temps (s)", ylabel="Nm", legend=:topright, grid=true)
+
 display(plt1)
 ```
 
@@ -775,29 +831,31 @@ using LinearAlgebra, Plots, JuMP, Ipopt, COSMO, IterativeSolvers, LinearMaps, OS
 x0 = zeros(n)
 x0[11] = 1.0                    # altitude 1 m en hover
 
-#   Modèle JuMP « all-at-once »
+# --- Modèle JuMP « all-at-once »
 model = Model(Ipopt.Optimizer)
 set_optimizer_attribute(model, "print_level", 0)
 
 @variable(model, X[1:n, 0:T])           # états
 @variable(model, U[1:m, 0:T-1])         # commandes
 
-# — dynamique linéaire
+# --- dynamique linéaire + gravité (affine)
+c = zeros(n)
+c[12] = -Ts * g                         # agit sur ż
 for k in 0:T-1
-    @constraint(model, X[:, k+1] .== Ad * X[:, k] + Bd * U[:, k])
+    @constraint(model, X[:, k+1] .== Ad * X[:, k] + Bd * U[:, k] + c)   # <-- +c
 end
 
-# — CONTRAINTE d’état initial  (= hover)  
+# --- CONTRAINTE d’état initial  (= hover)
 @constraint(model, X[:, 0] .== x0)
 
-# — bornes (angles ±20°, poussée 0–2 mg)
+# --- bornes (angles ±20°, poussée 0–2 mg)
 deg20 = deg2rad(20.0)
 @constraint(model, -deg20 .<= X[1, :] .<=  deg20)   # φ
 @constraint(model, -deg20 .<= X[3, :] .<=  deg20)   # θ
 @constraint(model, -deg20 .<= X[5, :] .<=  deg20)   # ψ
 @constraint(model, 0       .<= U[1, :] .<= 2 * mass * g)
 
-# — coût
+# --- coût (référence alignée sur les mêmes instants que X[:,k])
 @expression(model, running_cost,
     sum( (X[:, k] - r[:, k+1])' * Q * (X[:, k] - r[:, k+1]) +
          U[:, k]' * R * U[:, k]           for k in 0:T-1) )
@@ -807,7 +865,7 @@ deg20 = deg2rad(20.0)
 
 @objective(model, Min, 0.5 * running_cost + 0.5 * terminal_cost)
 
-# — point initial 
+# --- point initial
 set_start_value.(X[:, 0], x0)
 set_start_value.(U, 0.0)
 
@@ -816,27 +874,22 @@ println("Status          : ", termination_status(model))
 println("Objective value : ", objective_value(model))
 
 # ================================
-# Visualisation de la trajectoire et de l’erreur
+# Décomposition du coût (mêmes indices que l'objectif)
 # ================================
-
-X_val = value.(X)
+X_val = value.(X)        # DenseAxisArray indexé 0:T
 U_val = value.(U)
 
 J_state2   = 0.0
 J_control2 = 0.0
 
-for k in 1:T
-    e_k = X_val[:,k] - r[:,k]
-    J_state2 += 0.5 * (e_k' * Q * e_k)[1]
-end
-
 for k in 0:T-1
+    e_k = X_val[:,k] - r[:,k+1]                       # <-- aligné
+    J_state2 += 0.5 * (e_k' * Q * e_k)[1]
     J_control2 += 0.5 * (U_val[:,k]' * R * U_val[:,k])[1]
 end
 
 e_final = X_val[:,T] - r[:,T+1]
 J_terminal2 = 0.5 * (e_final' * F * e_final)[1]
-
 J2 = J_state2 + J_control2 + J_terminal2
 
 println("\n--- Décomposition du coût : Modèle 2 ---")
@@ -845,30 +898,17 @@ println("J_control2  = ", J_control2)
 println("J_terminal2 = ", J_terminal2)
 println("J2 total    = ", J2)
 
+# ================================
+# Visualisation (converti en Array 1-based)
+# ================================
+solutionX = Array(value.(X))   # colonnes 1..T+1 <-> instants 0..T
+z = solutionX[11, :]           # position verticale
+x = solutionX[7, :]            # position x
+y = solutionX[9, :]            # position y
 
-solutionX = Array(value.(X))
-
-z = solutionX[11, :]  # position verticale
-x = solutionX[7, :]   # position x
-y = solutionX[9, :]   # position y
-
-# Erreurs de suivi
-e_z = z .- r[11, :]
-e_x = x .- r[7, :]
-e_y = y .- r[9, :]
-z = solutionX[11, :]  # position verticale
-x = solutionX[7, :]   # position x
-y = solutionX[9, :]   # position y
-
-# Erreurs de suivi
-e_z = z .- r[11, :]
-e_x = x .- r[7, :]
-e_y = y .- r[9, :]
-
-# Références
-r_z = r[11, :]
-r_x = r[7, :]
-r_y = r[9, :]
+# Références & erreurs (mêmes colonnes)
+r_z = r[11, :];  r_x = r[7, :];  r_y = r[9, :]
+e_z = z .- r_z;  e_x = x .- r_x; e_y = y .- r_y
 
 t = Ts .* (0:T)  # temps réel en secondes
 
@@ -876,34 +916,34 @@ t = Ts .* (0:T)  # temps réel en secondes
 plt2 = plot(layout = (3, 2), size=(1000, 800))
 
 # Trajectoire x
-plot!(plt2[1], t, x, lw=2, label="x (suivie)", color=:blue)
+plot!(plt2[1], t, x,   lw=2, label="x (suivie)", color=:blue)
 plot!(plt2[1], t, r_x, lw=2, label="x (référence)", linestyle=:dash, color=:red)
 plot!(plt2[1], title="Trajectoire en x", xlabel="Temps (s)", ylabel="x (m)", legend=:bottomright, grid=true)
 
 # Erreur x
 plot!(plt2[2], t, e_x, lw=2, label="Erreur x", color=:purple)
-plot!(plt2[2], title="Erreur de suivi (x)", xlabel="Temps (s)", label="Erreur (m)", legend=:topright, grid=true)
+plot!(plt2[2], title="Erreur de suivi (x)", xlabel="Temps (s)", ylabel="Erreur (m)", legend=:topright, grid=true)
 
 # Trajectoire y
-plot!(plt2[3], t, y, lw=2, label="y (suivie)", color=:blue)
-plot!(plt2[3], t, r_y, lw=2, label="y (référence)", inestyle=:dash, color=:red)
-plot!(plt2[3], title="Trajectoire en y", xlabel="Temps (s)", label="y (m)", legend=:bottomright, grid=true)
+plot!(plt2[3], t, y,   lw=2, label="y (suivie)", color=:blue)
+plot!(plt2[3], t, r_y, lw=2, label="y (référence)", linestyle=:dash, color=:red)
+plot!(plt2[3], title="Trajectoire en y", xlabel="Temps (s)", ylabel="y (m)", legend=:bottomright, grid=true)
 
 # Erreur y
 plot!(plt2[4], t, e_y, lw=2, label="Erreur y", color=:purple)
-plot!(plt2[4], title="Erreur de suivi (y)", xlabel="Temps (s)", label="Erreur (m)", legend=:topright, grid=true)
+plot!(plt2[4], title="Erreur de suivi (y)", xlabel="Temps (s)", ylabel="Erreur (m)", legend=:topright, grid=true)
 
 # Trajectoire z
-plot!(plt2[5], t, z, lw=2, label="z (suivie)", color=:blue)
-plot!(plt2[5], t, r_z, lw=2, label="z (référence)", inestyle=:dash, color=:red)
-plot!(plt2[5], title="Trajectoire en z", xlabel="Temps (s)", label="z (m)", legend=:bottomright, grid=true)
+plot!(plt2[5], t, z,   lw=2, label="z (suivie)", color=:blue)
+plot!(plt2[5], t, r_z, lw=2, label="z (référence)", linestyle=:dash, color=:red)
+plot!(plt2[5], title="Trajectoire en z", xlabel="Temps (s)", ylabel="z (m)", legend=:bottomright, grid=true)
 
 # Erreur z
 plot!(plt2[6], t, e_z, lw=2, label="Erreur z", color=:purple)
-plot!(plt2[6], title="Erreur de suivi (z)", xlabel="Temps (s)", label="Erreur (m)", legend=:topright, grid=true)
+plot!(plt2[6], title="Erreur de suivi (z)", xlabel="Temps (s)", ylabel="Erreur (m)", legend=:topright, grid=true)
 
-# Affichage
 display(plt2)
+
 
 ```
 
@@ -924,27 +964,34 @@ Le solveur COSMO implémente le **Conic operator splitting method **, qui est pa
 ```{julia}
 using JuMP, COSMO, IterativeSolvers, LinearMaps, OSQP, MathOptInterface, Plots
 
+x0 = zeros(n)
+x0[11] = 1.0                    # altitude 1 m en hover
+
+# --- Modèle JuMP « all-at-once »
 model3 = Model(COSMO.Optimizer)
+set_optimizer_attribute(model3, "verbose", false)
 
 @variable(model3, X[1:n, 0:T])           # états
 @variable(model3, U[1:m, 0:T-1])         # commandes
 
-# — dynamique linéaire
+# --- dynamique linéaire + gravité (affine)
+c = zeros(n)
+c[12] = -Ts * g                         # agit sur ż
 for k in 0:T-1
-    @constraint(model3, X[:, k+1] .== Ad * X[:, k] + Bd * U[:, k])
+    @constraint(model3, X[:, k+1] .== Ad * X[:, k] + Bd * U[:, k] + c)   # <-- +c
 end
 
-# — CONTRAINTE d’état initial  (= hover)  
+# --- CONTRAINTE d’état initial  (= hover)
 @constraint(model3, X[:, 0] .== x0)
 
-# — bornes (angles ±20°, poussée 0–2 mg)
+# --- bornes (angles ±20°, poussée 0–2 mg)
 deg20 = deg2rad(20.0)
 @constraint(model3, -deg20 .<= X[1, :] .<=  deg20)   # φ
 @constraint(model3, -deg20 .<= X[3, :] .<=  deg20)   # θ
 @constraint(model3, -deg20 .<= X[5, :] .<=  deg20)   # ψ
 @constraint(model3, 0       .<= U[1, :] .<= 2 * mass * g)
 
-# — coût
+# --- coût (référence alignée sur les mêmes instants que X[:,k])
 @expression(model3, running_cost,
     sum( (X[:, k] - r[:, k+1])' * Q * (X[:, k] - r[:, k+1]) +
          U[:, k]' * R * U[:, k]           for k in 0:T-1) )
@@ -954,74 +1001,50 @@ deg20 = deg2rad(20.0)
 
 @objective(model3, Min, 0.5 * running_cost + 0.5 * terminal_cost)
 
-# — point initial 
+# --- point initial
 set_start_value.(X[:, 0], x0)
 set_start_value.(U, 0.0)
 
 optimize!(model3)
 println("Status          : ", termination_status(model3))
+println("Objective value : ", objective_value(model3))
 
 # ================================
-# Visualisation de la trajectoire et de l’erreur
+# Décomposition du coût (mêmes indices que l'objectif)
 # ================================
-
-X_val = value.(X)
+X_val = value.(X)        # DenseAxisArray indexé 0:T
 U_val = value.(U)
 
 J_state3   = 0.0
 J_control3 = 0.0
 
-# Coût d'état
-for k in 1:T
-    e_k = X_val[:,k] - r[:,k]
-    J_state3 += 0.5 * (e_k' * Q * e_k)[1]
-end
-
-# Coût de contrôle
 for k in 0:T-1
+    e_k = X_val[:,k] - r[:,k+1]                       # <-- aligné
+    J_state3 += 0.5 * (e_k' * Q * e_k)[1]
     J_control3 += 0.5 * (U_val[:,k]' * R * U_val[:,k])[1]
 end
 
-# Coût terminal
 e_final = X_val[:,T] - r[:,T+1]
 J_terminal3 = 0.5 * (e_final' * F * e_final)[1]
-
-# Coût total
 J3 = J_state3 + J_control3 + J_terminal3
 
-println("\n--- Décomposition du coût ---")
+println("\n--- Décomposition du coût : Modèle 3 ---")
 println("J_state3    = ", J_state3)
 println("J_control3  = ", J_control3)
 println("J_terminal3 = ", J_terminal3)
 println("J3 total    = ", J3)
 
+# ================================
+# Visualisation (converti en Array 1-based)
+# ================================
+solutionX = Array(value.(X))   # colonnes 1..T+1 <-> instants 0..T
+z = solutionX[11, :]           # position verticale
+x = solutionX[7, :]            # position x
+y = solutionX[9, :]            # position y
 
-
-
-
-solutionX = Array(value.(X))
-
-z = solutionX[11, :]  # position verticale
-x = solutionX[7, :]   # position x
-y = solutionX[9, :]   # position y
-
-# Erreurs de suivi
-e_z = z .- r[11, :]
-e_x = x .- r[7, :]
-e_y = y .- r[9, :]
-z = solutionX[11, :]  # position verticale
-x = solutionX[7, :]   # position x
-y = solutionX[9, :]   # position y
-
-# Erreurs de suivi
-e_z = z .- r[11, :]
-e_x = x .- r[7, :]
-e_y = y .- r[9, :]
-
-# Références
-r_z = r[11, :]
-r_x = r[7, :]
-r_y = r[9, :]
+# Références & erreurs (mêmes colonnes)
+r_z = r[11, :];  r_x = r[7, :];  r_y = r[9, :]
+e_z = z .- r_z;  e_x = x .- r_x; e_y = y .- r_y
 
 t = Ts .* (0:T)  # temps réel en secondes
 
@@ -1029,33 +1052,32 @@ t = Ts .* (0:T)  # temps réel en secondes
 plt3 = plot(layout = (3, 2), size=(1000, 800))
 
 # Trajectoire x
-plot!(plt3[1], t, x, lw=2, label="x (suivie)", color=:blue)
+plot!(plt3[1], t, x,   lw=2, label="x (suivie)", color=:blue)
 plot!(plt3[1], t, r_x, lw=2, label="x (référence)", linestyle=:dash, color=:red)
 plot!(plt3[1], title="Trajectoire en x", xlabel="Temps (s)", ylabel="x (m)", legend=:bottomright, grid=true)
 
 # Erreur x
 plot!(plt3[2], t, e_x, lw=2, label="Erreur x", color=:purple)
-plot!(plt3[2], title="Erreur de suivi (x)", xlabel="Temps (s)", label="Erreur (m)", legend=:topright, grid=true)
+plot!(plt3[2], title="Erreur de suivi (x)", xlabel="Temps (s)", ylabel="Erreur (m)", legend=:topright, grid=true)
 
 # Trajectoire y
-plot!(plt3[3], t, y, lw=2, label="y (suivie)", color=:blue)
-plot!(plt3[3], t, r_y, lw=2, label="y (référence)", inestyle=:dash, color=:red)
-plot!(plt3[3], title="Trajectoire en y", xlabel="Temps (s)", label="y (m)", legend=:bottomright, grid=true)
+plot!(plt3[3], t, y,   lw=2, label="y (suivie)", color=:blue)
+plot!(plt3[3], t, r_y, lw=2, label="y (référence)", linestyle=:dash, color=:red)
+plot!(plt3[3], title="Trajectoire en y", xlabel="Temps (s)", ylabel="y (m)", legend=:bottomright, grid=true)
 
 # Erreur y
 plot!(plt3[4], t, e_y, lw=2, label="Erreur y", color=:purple)
-plot!(plt3[4], title="Erreur de suivi (y)", xlabel="Temps (s)", label="Erreur (m)", legend=:topright, grid=true)
+plot!(plt3[4], title="Erreur de suivi (y)", xlabel="Temps (s)", ylabel="Erreur (m)", legend=:topright, grid=true)
 
 # Trajectoire z
-plot!(plt3[5], t, z, lw=2, label="z (suivie)", color=:blue)
-plot!(plt3[5], t, r_z, lw=2, label="z (référence)", inestyle=:dash, color=:red)
-plot!(plt3[5], title="Trajectoire en z", xlabel="Temps (s)", label="z (m)", legend=:bottomright, grid=true)
+plot!(plt3[5], t, z,   lw=2, label="z (suivie)", color=:blue)
+plot!(plt3[5], t, r_z, lw=2, label="z (référence)", linestyle=:dash, color=:red)
+plot!(plt3[5], title="Trajectoire en z", xlabel="Temps (s)", ylabel="z (m)", legend=:bottomright, grid=true)
 
 # Erreur z
 plot!(plt3[6], t, e_z, lw=2, label="Erreur z", color=:purple)
-plot!(plt3[6], title="Erreur de suivi (z)", xlabel="Temps (s)", label="Erreur (m)", legend=:topright, grid=true)
+plot!(plt3[6], title="Erreur de suivi (z)", xlabel="Temps (s)", ylabel="Erreur (m)", legend=:topright, grid=true)
 
-# Affichage
 display(plt3)
 
 
@@ -1070,70 +1092,72 @@ Comme le nombre de variable est différent que dans le problème formulé et pr�
 # Partie 5 : Résolution avec le solver OSQP
 
 OSQP (Operator Splitting Quadratic Program) est une méthode servant a résoudre des problème quadratique à contraintes linéaires. C'est exactement les propriétés que nous souhaitons exploiter pour le problème monolithique.
+
  ```{julia}
 using LinearAlgebra, Plots, JuMP, Ipopt, COSMO, IterativeSolvers, LinearMaps, OSQP, MathOptInterface
 
-model2 = Model(OSQP.Optimizer)
-set_optimizer_attribute(model, "print_level", 1)
+x0 = zeros(n)
+x0[11] = 1.0                    # altitude 1 m en hover
 
-@variable(model2, X[1:n, 0:T])           # états
-@variable(model2, U[1:m, 0:T-1])         # commandes
+# --- Modèle JuMP « all-at-once »
+model4 = Model(OSQP.Optimizer)
+set_optimizer_attribute(model4, "verbose", false)
 
-# — dynamique linéaire
+@variable(model4, X[1:n, 0:T])           # états
+@variable(model4, U[1:m, 0:T-1])         # commandes
+
+# --- dynamique linéaire + gravité (affine)
+c = zeros(n)
+c[12] = -Ts * g                         # agit sur ż
 for k in 0:T-1
-    @constraint(model2, X[:, k+1] .== Ad * X[:, k] + Bd * U[:, k])
+    @constraint(model4, X[:, k+1] .== Ad * X[:, k] + Bd * U[:, k] + c)   # <-- +c
 end
 
-# — CONTRAINTE d’état initial  (= hover)  
-@constraint(model2, X[:, 0] .== x0)
+# --- CONTRAINTE d’état initial  (= hover)
+@constraint(model4, X[:, 0] .== x0)
 
-# — bornes (angles ±20°, poussée 0–2 mg)
+# --- bornes (angles ±20°, poussée 0–2 mg)
 deg20 = deg2rad(20.0)
-@constraint(model2, -deg20 .<= X[1, :] .<=  deg20)   # φ
-@constraint(model2, -deg20 .<= X[3, :] .<=  deg20)   # θ
-@constraint(model2, -deg20 .<= X[5, :] .<=  deg20)   # ψ
-@constraint(model2, 0       .<= U[1, :] .<= 2 * mass * g)
+@constraint(model4, -deg20 .<= X[1, :] .<=  deg20)   # φ
+@constraint(model4, -deg20 .<= X[3, :] .<=  deg20)   # θ
+@constraint(model4, -deg20 .<= X[5, :] .<=  deg20)   # ψ
+@constraint(model4, 0       .<= U[1, :] .<= 2 * mass * g)
 
-# — coût
-@expression(model2, running_cost,
+# --- coût (référence alignée sur les mêmes instants que X[:,k])
+@expression(model4, running_cost,
     sum( (X[:, k] - r[:, k+1])' * Q * (X[:, k] - r[:, k+1]) +
          U[:, k]' * R * U[:, k]           for k in 0:T-1) )
 
-@expression(model2, terminal_cost,
+@expression(model4, terminal_cost,
     (X[:, T] - r[:, T+1])' * F * (X[:, T] - r[:, T+1]) )
 
-@objective(model2, Min, 0.5 * running_cost + 0.5 * terminal_cost)
+@objective(model4, Min, 0.5 * running_cost + 0.5 * terminal_cost)
 
-# — point initial 
+# --- point initial
 set_start_value.(X[:, 0], x0)
 set_start_value.(U, 0.0)
 
-optimize!(model2)
-println("Status          : ", termination_status(model2))
-println("Objective value : ", objective_value(model2))
+optimize!(model4)
+println("Status          : ", termination_status(model4))
+println("Objective value : ", objective_value(model4))
 
 # ================================
-# Visualisation de la trajectoire et de l’erreur
+# Décomposition du coût (mêmes indices que l'objectif)
 # ================================
-
-X_val = value.(X)
+X_val = value.(X)        # DenseAxisArray indexé 0:T
 U_val = value.(U)
 
 J_state4   = 0.0
 J_control4 = 0.0
 
-for k in 1:T
-    e_k = X_val[:,k] - r[:,k]
-    J_state4 += 0.5 * (e_k' * Q * e_k)[1]
-end
-
 for k in 0:T-1
+    e_k = X_val[:,k] - r[:,k+1]                       # <-- aligné
+    J_state4 += 0.5 * (e_k' * Q * e_k)[1]
     J_control4 += 0.5 * (U_val[:,k]' * R * U_val[:,k])[1]
 end
 
 e_final = X_val[:,T] - r[:,T+1]
 J_terminal4 = 0.5 * (e_final' * F * e_final)[1]
-
 J4 = J_state4 + J_control4 + J_terminal4
 
 println("\n--- Décomposition du coût : Modèle 4 ---")
@@ -1142,29 +1166,17 @@ println("J_control4  = ", J_control4)
 println("J_terminal4 = ", J_terminal4)
 println("J4 total    = ", J4)
 
-solutionX = Array(value.(X))
+# ================================
+# Visualisation (converti en Array 1-based)
+# ================================
+solutionX = Array(value.(X))   # colonnes 1..T+1 <-> instants 0..T
+z = solutionX[11, :]           # position verticale
+x = solutionX[7, :]            # position x
+y = solutionX[9, :]            # position y
 
-z = solutionX[11, :]  # position verticale
-x = solutionX[7, :]   # position x
-y = solutionX[9, :]   # position y
-
-# Erreurs de suivi
-e_z = z .- r[11, :]
-e_x = x .- r[7, :]
-e_y = y .- r[9, :]
-z = solutionX[11, :]  # position verticale
-x = solutionX[7, :]   # position x
-y = solutionX[9, :]   # position y
-
-# Erreurs de suivi
-e_z = z .- r[11, :]
-e_x = x .- r[7, :]
-e_y = y .- r[9, :]
-
-# Références
-r_z = r[11, :]
-r_x = r[7, :]
-r_y = r[9, :]
+# Références & erreurs (mêmes colonnes)
+r_z = r[11, :];  r_x = r[7, :];  r_y = r[9, :]
+e_z = z .- r_z;  e_x = x .- r_x; e_y = y .- r_y
 
 t = Ts .* (0:T)  # temps réel en secondes
 
@@ -1172,33 +1184,32 @@ t = Ts .* (0:T)  # temps réel en secondes
 plt4 = plot(layout = (3, 2), size=(1000, 800))
 
 # Trajectoire x
-plot!(plt4[1], t, x, lw=2, label="x (suivie)", color=:blue)
+plot!(plt4[1], t, x,   lw=2, label="x (suivie)", color=:blue)
 plot!(plt4[1], t, r_x, lw=2, label="x (référence)", linestyle=:dash, color=:red)
 plot!(plt4[1], title="Trajectoire en x", xlabel="Temps (s)", ylabel="x (m)", legend=:bottomright, grid=true)
 
 # Erreur x
 plot!(plt4[2], t, e_x, lw=2, label="Erreur x", color=:purple)
-plot!(plt4[2], title="Erreur de suivi (x)", xlabel="Temps (s)", label="Erreur (m)", legend=:topright, grid=true)
+plot!(plt4[2], title="Erreur de suivi (x)", xlabel="Temps (s)", ylabel="Erreur (m)", legend=:topright, grid=true)
 
 # Trajectoire y
-plot!(plt4[3], t, y, lw=2, label="y (suivie)", color=:blue)
-plot!(plt4[3], t, r_y, lw=2, label="y (référence)", inestyle=:dash, color=:red)
-plot!(plt4[3], title="Trajectoire en y", xlabel="Temps (s)", label="y (m)", legend=:bottomright, grid=true)
+plot!(plt4[3], t, y,   lw=2, label="y (suivie)", color=:blue)
+plot!(plt4[3], t, r_y, lw=2, label="y (référence)", linestyle=:dash, color=:red)
+plot!(plt4[3], title="Trajectoire en y", xlabel="Temps (s)", ylabel="y (m)", legend=:bottomright, grid=true)
 
 # Erreur y
 plot!(plt4[4], t, e_y, lw=2, label="Erreur y", color=:purple)
-plot!(plt4[4], title="Erreur de suivi (y)", xlabel="Temps (s)", label="Erreur (m)", legend=:topright, grid=true)
+plot!(plt4[4], title="Erreur de suivi (y)", xlabel="Temps (s)", ylabel="Erreur (m)", legend=:topright, grid=true)
 
 # Trajectoire z
-plot!(plt4[5], t, z, lw=2, label="z (suivie)", color=:blue)
-plot!(plt4[5], t, r_z, lw=2, label="z (référence)", inestyle=:dash, color=:red)
-plot!(plt4[5], title="Trajectoire en z", xlabel="Temps (s)", label="z (m)", legend=:bottomright, grid=true)
+plot!(plt4[5], t, z,   lw=2, label="z (suivie)", color=:blue)
+plot!(plt4[5], t, r_z, lw=2, label="z (référence)", linestyle=:dash, color=:red)
+plot!(plt4[5], title="Trajectoire en z", xlabel="Temps (s)", ylabel="z (m)", legend=:bottomright, grid=true)
 
 # Erreur z
 plot!(plt4[6], t, e_z, lw=2, label="Erreur z", color=:purple)
-plot!(plt4[6], title="Erreur de suivi (z)", xlabel="Temps (s)", label="Erreur (m)", legend=:topright, grid=true)
+plot!(plt4[6], title="Erreur de suivi (z)", xlabel="Temps (s)", ylabel="Erreur (m)", legend=:topright, grid=true)
 
-# Affichage
 display(plt4)
 
 ```
