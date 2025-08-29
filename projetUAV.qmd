@@ -55,8 +55,7 @@ Les différentes méthodes utilisées sont :
 - la résolution avec COSMO (optimisation quadratique conique),  
 - et la résolution avec OSQP (optimisation quadratique à contraintes linéaires).  
 
-Cette comparaison permettra de mettre en évidence les avantages et inconvénients de chaque méthode pour le suivi optimal de trajectoire d’un drone quadrotor tout en déterminant laquelle est la plus efficace pour cette fonction objectif. Nous allons aussi tester une méthode spécifique aux problèmes quadratiques présentée en cours, mais nous n'avons pas encore atteint cet objectif. Nous espéront y arriver d'ici
-la phase 3.
+Cette comparaison permettra de mettre en évidence les avantages et inconvénients de chaque méthode pour le suivi optimal de trajectoire d’un drone quadrotor tout en déterminant laquelle est la plus efficace pour cette fonction objectif. Nous voulions aussi tester une méthode spécifique aux problèmes quadratiques présentée en cours, mais nous n'avons pas eu le temps de compléter cette objectif. Les méthodes utilisées permettent toutefois de comparer Ipopt et Riccati à des méthodes spécifiques aux problèmes quadratiques, ce qui était le but du projet.
  
 
 #  Modélisation du système
@@ -554,16 +553,16 @@ using Pkg
 Pkg.activate("projet_env")
 
 # Pkg.add("Plots")
-Pkg.add("JuMP")
- Pkg.add("Ipopt")
- Pkg.add("COSMO")
- Pkg.add("IterativeSolvers")
- Pkg.add("LinearMaps")
-Pkg.add("OSQP")
-Pkg.add("MathOptInterface")
-Pkg.add("Dates")
-Pkg.add("PrettyTables")
-Pkg.add("DataFrames")
+# Pkg.add("JuMP")
+#  Pkg.add("Ipopt")
+#  Pkg.add("COSMO")
+#  Pkg.add("IterativeSolvers")
+#  Pkg.add("LinearMaps")
+# Pkg.add("OSQP")
+# Pkg.add("MathOptInterface")
+# Pkg.add("Dates")
+# Pkg.add("PrettyTables")
+# Pkg.add("DataFrames")
 
 
 ```
@@ -812,14 +811,14 @@ display(plt1)
 ```
 
 
-La valeur de la fonction objectif est de 2,27*10^5. On remarque sur les graphiques que la trajectoire est plutot bien respectée avec de faibles erreurs de suivis.
-La fonction objectif comporte 3 parties, une partie suivie, une partie contrôle et une partie coût position finale. On constate que la partie suivi participe pour beaucoup à la fonction objectif (99,5%).
+La valeur de la fonction objectif est de 3,04*10^6. On remarque sur les graphiques que la trajectoire est plutot bien respectée avec de faibles erreurs de suivis.
+La fonction objectif comporte 3 parties, une partie suivie, une partie contrôle et une partie coût position finale. On constate que la partie suivi participe pour beaucoup à la fonction objectif (99,5%).  
+L'algorithme à résolu le système en 4755ms.
 
 
 ## partie 3 : résolution avec Ipopt
 
-Le but de cette section est de comparer les résultats obtenus dans la Partie 2 avec des résultats venant de stratégies plus générique
-comme par exemple IPOPT. Le modèle est construit à partir de la librairie JuMP. 
+Le but de cette section est de comparer les résultats obtenus dans la Partie 2 avec des résultats venant de stratégies plus générique comme par exemple IPOPT. Le modèle est construit à partir de la librairie JuMP. 
 
 
 ```{julia}
@@ -864,14 +863,18 @@ deg20 = deg2rad(20.0)
     (X[:, T] - r[:, T+1])' * F * (X[:, T] - r[:, T+1]) )
 
 @objective(model, Min, 0.5 * running_cost + 0.5 * terminal_cost)
+start_time = now()
 
 # --- point initial
 set_start_value.(X[:, 0], x0)
 set_start_value.(U, 0.0)
 
 optimize!(model)
+end_time = now()
+elapsed = end_time - start_time
 println("Status          : ", termination_status(model))
 println("Objective value : ", objective_value(model))
+println("Temps: ", elapsed)
 
 # ================================
 # Décomposition du coût (mêmes indices que l'objectif)
@@ -949,11 +952,11 @@ display(plt2)
 
 ## Analyse des résultats
 
-La méthode IPOPT converge belle et bien pour ce problème et on obtient une valeur de l'objectif de 1.230511402197558e8. Il est possible de faire mieux avec des méthodes utilisant les propriétés du problème. Deux exemples de ces méthodes seront visités dans la prochaine section. Notons que la convergence a été atteinte en 4000 itérations pour un temps de 1.63e+001 secondes. On observe sur les graphiques que la solution proposée est efficace, en ce sens que le trajet à suivre est assez bien respectés. Notons que les erreurs sont plus grandes autour des points où il y a un changement dans la dérivée. Notre approximation étant une fonction lisse, cela n'est pas étonnant. L'erreur est aussi grande au temps final, ce qui peut être un problème dépendament des applications. Un grand déplacement programmé comme une somme de petites trajectoires pourrait facilement accumuler des erreurs. 
+La méthode IPOPT converge belle et bien pour ce problème et on obtient une valeur de l'objectif de 8.13888e5 en 3941 ms. Il est possible de faire mieux avec des méthodes utilisant les propriétés du problème. Deux exemples de ces méthodes seront visités dans la prochaine section.  On observe sur les graphiques que la solution proposée est efficace, en ce sens que le trajet à suivre est assez bien respectés. Notons que les erreurs sont plus grandes autour des points où il y a un changement dans la dérivée. Notre approximation étant une fonction lisse, cela n'est pas étonnant. L'erreur est aussi grande au temps final, ce qui peut être un problème dépendament des applications. Un grand déplacement programmé comme une somme de petites trajectoires pourrait facilement accumuler des erreurs. 
 
-Notons toutefois qu'il semble y avoir une erreur à quelque part dans le code, en effet, il y a clairement une grosse erreur dans la trajectoire en z alors que le graphe de l'erreur semble indiquer que l'estimation est excellente. Nous pensons qu'il s'agit d'une erreur dans notre implémentation de la modélisation JUmP du problème. Cette modélisation étant utilisée pour les deux prochaines sections, nous pensons qu'elle explique certains de nos résultats dans cette section aussi.
+Notons que l'erreur sur la trajectoire lors de la phase 2 à été corrigé ce qui permet une bien meilleure performance.
 
-À cause de cette erreur, nous n'approfondissons pas l'analyse des résultats pour l'instant. Le lecteur trouvera toutefois un tableau comparatif des méthodes à la fin de la section 5.
+
 
 
 
@@ -1004,10 +1007,13 @@ deg20 = deg2rad(20.0)
 # --- point initial
 set_start_value.(X[:, 0], x0)
 set_start_value.(U, 0.0)
-
+start_time=now()
 optimize!(model3)
+end_time = now()
+elapsed = end_time - start_time
 println("Status          : ", termination_status(model3))
 println("Objective value : ", objective_value(model3))
+println("Temps : ", elapsed)
 
 # ================================
 # Décomposition du coût (mêmes indices que l'objectif)
@@ -1085,9 +1091,11 @@ display(plt3)
 
 ## Analyse des résultats
 
-La méthode ne parvient pas à converger en moins de 5000 itérations. Toutefois, on constate une amélioration de la valeur de l'objectif qui est 10x plus petite que celle obtenue via Ipopt. Le temps de calcul est toutefois beaucoup plus élevé et on en déduit que cette méthode a une plus grande complexité que l'algorithme précédent. Nous estimons aussi que l'erreur dans notre modélisation JUmP est la cause de cette divergence. Il se pourrait que le problème ne soit plus convexe à cause de notre erreur. Nous étudiront cette hypothèse dans la phase 3.
+La méthode obtiens un résultat très similaire à Ipopt avec une valeur de la fonction objectif de 8.133889e5 qui est répartie de la même façon entre les erreurs d'état, de trajectoire et d'erreur terminale. Cependant le temps de calcul est netement supérieur avec un temps de 214597 ms.
 
-Comme le nombre de variable est différent que dans le problème formulé et présenté dans l'article, il est difficile de comparer la complexité des deux algorithmes. Lorsque le temps de calcul est limité, il est toutefois préférable d'utiliser la méthode présentée dans l'article. Les graphes présentes une erreur qui est encore une fois espectable. On observe par aiileurs que la trajectoire en y est bien meilleure avec COSMO qu'avec Ipopt. Encore une fois, on observe de plus grandes erreurs là où il y a des changements dans la valeur des dérivées de la trajectoire à suivre. Bien que la valeur optimale obtenue via COSMO soit bonne, il est possible de faire mieux avec le solveur OSQP.
+Le problème de convergence de la phase 2 à été résolu et la méthode est maintenant fonctionnelle. 
+
+Comme le nombre de variable est différent que dans le problème formulé et présenté dans l'article, il est difficile de comparer la complexité des deux algorithmes. Lorsque le temps de calcul est limité, il est toutefois préférable d'utiliser la méthode présentée dans l'article. Les graphes présentes une erreur qui est encore une fois respectable. Encore une fois, on observe de plus grandes erreurs là où il y a des changements dans la valeur des dérivées de la trajectoire à suivre. Bien que la valeur optimale obtenue via COSMO soit bonne, il est possible de faire mieux avec le solveur OSQP.
 
 # Partie 5 : Résolution avec le solver OSQP
 
@@ -1136,10 +1144,13 @@ deg20 = deg2rad(20.0)
 # --- point initial
 set_start_value.(X[:, 0], x0)
 set_start_value.(U, 0.0)
-
+start_time = now()
 optimize!(model4)
+end_time=now()
+elapsed= end_time- start_time
 println("Status          : ", termination_status(model4))
 println("Objective value : ", objective_value(model4))
+println("Temps : ", elapsed)
 
 # ================================
 # Décomposition du coût (mêmes indices que l'objectif)
@@ -1159,6 +1170,8 @@ end
 e_final = X_val[:,T] - r[:,T+1]
 J_terminal4 = 0.5 * (e_final' * F * e_final)[1]
 J4 = J_state4 + J_control4 + J_terminal4
+
+
 
 println("\n--- Décomposition du coût : Modèle 4 ---")
 println("J_state4    = ", J_state4)
@@ -1216,10 +1229,12 @@ display(plt4)
 
 ## Analyse des résultats 
 
-Notons que cette méthode est bien plus efficace que Ipopt et COSMO. La trajectoire désirée est en général mieux approximée, le temps de calcul est meilleur que COSMO en restant très proche de celui d'Ipopt. De plus, la valeur optimale de l'objectif est dix fois plus petite que pour COSMO et cent fois plus petite qu'Ipopt. Cette méthode est donc à privilégier par rapport aux deux méthodes précédentes.
+La valeur de l'objectif est de 8.51560e5 ce qui es encore une fois similaire aux deux méthodes précédentes. Cependant le temps de calcul est nétement inférieur et obtiens même un meilleur résultat que Riccati avec un temps de 442ms. Cette méthode a donc de meilleur performances que la méthode du papier au niveau du temps et de la valeur objectif.
+
+Notons que cette méthode est bien plus efficace que Ipopt et COSMO. La trajectoire désirée est en général mieux approximée, le temps de calcul est meilleur que COSMO en restant très proche de celui d'Ipopt. 
 
 
-#Description de ce qui à été réalisé
+# Description de ce qui à été réalisé
 
 Nous avons reproduit les résultats du papier puis tester différentes méthodes de résolution pour la même trajectoire demandée. 
 Cela nous permets de comparer les méthodes sur leurs performances par rapport à la fonction objectif mais aussi par rapport au temps de calcul.
@@ -1233,7 +1248,7 @@ using PrettyTables
 modeles = ["Modèle de Riccati", "Ipopt", "Cosmo", "OSQP"]
 
 # Exemples de valeurs (remplace-les)
-temps_sec = [0.811, 1.243, 0.400, 0.950]
+temps_sec = [4.755, 3.941, 214.597, 2.955]
 J_state   = [J_state1, J_state2, J_state3, J_state4]
 J_control = [J_control1, J_control2, J_control3, J_control4]
 J_terminal= [J_terminal1, J_terminal2, J_terminal3, J_terminal4]
@@ -1254,33 +1269,40 @@ println(pretty_table(String, data; header=header))
 
 ```
 
+# Analyse des résultats
+## Temps d'exécution
+Les résultats sont assez clairs : 3 des 4 méthodes présentées sont à peu prêt équivalente par rapport au temps de calcul. On remarque que OSQP est la plus rapide et COSMO est de loin plus lente. 
+
+## Valeur objectif :
+Riccati est ici la méthode la moins performante, alors que les 3 autres méthodes sont à peu prêt équivalente. Cela est tout de même surprenant lorsque l'on considère que les autres méthodes résolvent des problèmes de plus haute dimension. En combinant le temps d'exécution et la valeur objectif, on déduit qu'Ipopt et OSQP sont les méthodes à privilégier pour ce genre de problème.
+
+Dans tout les cas, une erreur frappante se trouve en y au temps t =30 secondes. Cela est normal car la dérivée de la trajectoire à suivre possède une dirac en ce point et il est difficile d'approcher ce genre de fonction avec des fonctions lisses. On observe aussi des erreurs plus légères en z et en x, là où la trajectoire a un changement abrupte de direction. Finalement, la méthode de riccati est la seule à présenter une grosse erreur au moment final de l'expérience, ce pourquoi il sera mieux de privilégier les autres méthodes présentées dans ce projet pour ce genre de problème.
+
 # Difficultés rencontrées
 
 Pour enrichir le projet, nous avons décidé de faire une recherche pour inclure des algorithmes qui ne sont pas présentés dans le cours. Plusieurs de ces méthodes existent mais ne possèdent pas nécessairement une implémentation simple en Julia ou n’ont pas de documentations claires. Nous avons finalement décidé d’arrêter notre choix sur 2 méthodes: Conic operator splitting method (COSMO) et Operator splitting Quadratic Program (OSQP).
 
-Nous n'arrivons toujours pas à expliquer pourquoi Ipopt ne converge pas dans la troisième dimension (l'axe z). Nous étudions actuellement notre code pour comprendre ce qui génère cette erreur. Comme nous utilisons la même modélisation JUmP pour OSQP et COSMO, nous supposons que cette même erreur rend plus difficile la convergence et c'est pourquoi COSMO ne converge pas en 5000 itérations. Comme son objectif est actuellement meilleurs que celui d'Ipopt, nous avons décidé de le conserver, en espérant pouvoir obtenir de résultats plus satisfaisant lorsque l'erreur de modélisation sera trouvée.
+Références : 
+COSMO: A Conic Operator Splitting Method for Convex
+Conic Problems, Michael Garstka1 · Mark Cannon1 · Paul Goulart
 
-# Description détaillée de ce qui a déjà été accompli :
+OSQP : https://osqp.org/docs/solver/index.html
 
-Pour l’instant, le code a été développé pour recréer les résultats de l’article. Nous avons donc implémenté la méthode récursive de riccati et l’optimisation all at once (cas Ipopt). Nous avons aussi débuté la comparaison avec des méthodes trouvées en ligne mais nous nous frappons à des problèmes de convergences qui seront résolus nous l’espérons d’ici la prochaine phase. Il reste encore à implémenter la résolution de l’optimisation all at once avec un algorithme présenté en cours.
+# Description détaillée de ce qui a été accompli :
 
-Nous avons complété les consignes de la phase 1 qui étaient manquantes (voir annexe). Cette annexe inclus une description de la problématique, une description des objectifs, une description d'un plan d'action et unedescription de l'impact attendu. Dans la première section de ce rapport, nous avons révisé et présenté la description de la problématique.
+Le code a été développé pour recréer les résultats de l’article. Nous avons donc implémenté la méthode récursive de riccati et l’optimisation all at once (cas Ipopt). Nous avons aussi complété la comparaison avec des méthodes trouvées en ligne et avons résolus les problèmes de convergences dûs à une erreur de modélisation. 
 
-Comme nous rencontrons des problèmes de modélisation, nous pouvons difficilement comparer les résultats obtenus des différentes méthodes. Nous avons toutefois résumé les résultats temporaires que nous avons dans un tableau et conservé notre ébauche d'analyse des résultats, que nous avons quelque peu amélioré. Nous ne voulions pas passer trop de temps sur cela tant que l'erreur n'est pas corrigée. Nous estimons que la majorité du code est déjà écris en ce sens que tout devrait bien fonctionné une fois l'erreur de modélisation corrigée. 
+Nous avions comme objectif initial d'implémenter une méthode quadratique vue en cours pour la comparer à COSMO et OSPQ. Malheureusement, nous avons manqué de temps et avons décidé d'abandonner ce point afin d'améliorer la qualité du reste du projet. Nous avons réussi à réviser notre modélisation du problème et réimplémentant le code. Nous avions oublié le facteur 
+"c" dans la construction du mondèle JUmP, ce qui générait les erreurs de convergences que nous obtenions dans la phase 2.
 
-# Description détaillée de ce qu'il reste à accomplir. 
+# Perspectives personelles 
+Ce projet à été interessant car il nous a permis de mettre en pratique  différents algorithmes d'optimisation ainsi que d'en découvrir de nouveaux et ce sur un sujet tel que les drones, qui est largement d'actualité. Comparer et analyser les résultats nous ont permis d'avoir une meilleure idée des algorithmes et de leurs différences
 
-## Prioritaire: 
-Résoudre l'erreur de modélisation se trouvant dans le code. Une fois l'erreur corrigée, nous pourrons procéder à une analyse plus approfondie de nos résultats. Nous espérons avoir accomplis ceci d'ici une semaine.
 
-## Secondaire : 
-Si le temps le permet, nous désirons choisir et implémenter une méthode dédiée aux problèmes quadratiques présentées en cours afin d'enrichir la comparaison des différentes méthodes et de tirer de meilleures conclusions sur la problématique du projet.
+# Ouverture 
+Une prochaine étape si nous avions plus de temps aurait pu être d'essayer  d'améliorer les performances du modèle en évitant une linéarisation globale des équations mais plutôt une  linéarisation par morceau autour de différents points d'équilibres ou en fonction d'un paramètre.
 
-## Une semaine avant la remise :
-Faire une analyse détaillée des résultats que nous avons obtenus à partir des méthodes que nous auront réussi à implémenter à ce moment là. Les méthodes qui ne seront pas implémentée correctement seront abandonnée.
 
-## 2 jours avant la remise : 
-Écrire notre perspectice personnelle sur le projet, dire quels objectifs initiaux ont étés accomplis, compléter la section portant sur la description des difficultés que nous avons rencontrés. Finaliser le rapport, apporter des corrections mineures et faire des retouches.
 
 ## Lien Github
 
