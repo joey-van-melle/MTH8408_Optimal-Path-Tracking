@@ -554,16 +554,16 @@ using Pkg
 Pkg.activate("projet_env")
 
 # Pkg.add("Plots")
-Pkg.add("JuMP")
- Pkg.add("Ipopt")
- Pkg.add("COSMO")
- Pkg.add("IterativeSolvers")
- Pkg.add("LinearMaps")
-Pkg.add("OSQP")
-Pkg.add("MathOptInterface")
-Pkg.add("Dates")
-Pkg.add("PrettyTables")
-Pkg.add("DataFrames")
+# Pkg.add("JuMP")
+#  Pkg.add("Ipopt")
+#  Pkg.add("COSMO")
+#  Pkg.add("IterativeSolvers")
+#  Pkg.add("LinearMaps")
+# Pkg.add("OSQP")
+# Pkg.add("MathOptInterface")
+# Pkg.add("Dates")
+# Pkg.add("PrettyTables")
+# Pkg.add("DataFrames")
 
 
 ```
@@ -812,8 +812,9 @@ display(plt1)
 ```
 
 
-La valeur de la fonction objectif est de 2,27*10^5. On remarque sur les graphiques que la trajectoire est plutot bien respectée avec de faibles erreurs de suivis.
-La fonction objectif comporte 3 parties, une partie suivie, une partie contrôle et une partie coût position finale. On constate que la partie suivi participe pour beaucoup à la fonction objectif (99,5%).
+La valeur de la fonction objectif est de 3,2*10^5. On remarque sur les graphiques que la trajectoire est plutot bien respectée avec de faibles erreurs de suivis.
+La fonction objectif comporte 3 parties, une partie suivie, une partie contrôle et une partie coût position finale. On constate que la partie suivi participe pour beaucoup à la fonction objectif (99,5%).  
+L'algorithme à résolu le système en 547ms.
 
 
 ## partie 3 : résolution avec Ipopt
@@ -864,14 +865,18 @@ deg20 = deg2rad(20.0)
     (X[:, T] - r[:, T+1])' * F * (X[:, T] - r[:, T+1]) )
 
 @objective(model, Min, 0.5 * running_cost + 0.5 * terminal_cost)
+start_time = now()
 
 # --- point initial
 set_start_value.(X[:, 0], x0)
 set_start_value.(U, 0.0)
 
 optimize!(model)
+end_time = now()
+elapsed = end_time - start_time
 println("Status          : ", termination_status(model))
 println("Objective value : ", objective_value(model))
+println("Temps: ", elapsed)
 
 # ================================
 # Décomposition du coût (mêmes indices que l'objectif)
@@ -949,11 +954,11 @@ display(plt2)
 
 ## Analyse des résultats
 
-La méthode IPOPT converge belle et bien pour ce problème et on obtient une valeur de l'objectif de 1.230511402197558e8. Il est possible de faire mieux avec des méthodes utilisant les propriétés du problème. Deux exemples de ces méthodes seront visités dans la prochaine section. Notons que la convergence a été atteinte en 4000 itérations pour un temps de 1.63e+001 secondes. On observe sur les graphiques que la solution proposée est efficace, en ce sens que le trajet à suivre est assez bien respectés. Notons que les erreurs sont plus grandes autour des points où il y a un changement dans la dérivée. Notre approximation étant une fonction lisse, cela n'est pas étonnant. L'erreur est aussi grande au temps final, ce qui peut être un problème dépendament des applications. Un grand déplacement programmé comme une somme de petites trajectoires pourrait facilement accumuler des erreurs. 
+La méthode IPOPT converge belle et bien pour ce problème et on obtient une valeur de l'objectif de 8.13888e5 en 1102 ms. Il est possible de faire mieux avec des méthodes utilisant les propriétés du problème. Deux exemples de ces méthodes seront visités dans la prochaine section.  On observe sur les graphiques que la solution proposée est efficace, en ce sens que le trajet à suivre est assez bien respectés. Notons que les erreurs sont plus grandes autour des points où il y a un changement dans la dérivée. Notre approximation étant une fonction lisse, cela n'est pas étonnant. L'erreur est aussi grande au temps final, ce qui peut être un problème dépendament des applications. Un grand déplacement programmé comme une somme de petites trajectoires pourrait facilement accumuler des erreurs. 
 
-Notons toutefois qu'il semble y avoir une erreur à quelque part dans le code, en effet, il y a clairement une grosse erreur dans la trajectoire en z alors que le graphe de l'erreur semble indiquer que l'estimation est excellente. Nous pensons qu'il s'agit d'une erreur dans notre implémentation de la modélisation JUmP du problème. Cette modélisation étant utilisée pour les deux prochaines sections, nous pensons qu'elle explique certains de nos résultats dans cette section aussi.
+Notons que l'erreur sur la trajectoire lors de la phase 2 à été corrigé ce qui permet une bien meilleure performance.
 
-À cause de cette erreur, nous n'approfondissons pas l'analyse des résultats pour l'instant. Le lecteur trouvera toutefois un tableau comparatif des méthodes à la fin de la section 5.
+
 
 
 
@@ -964,27 +969,34 @@ Le solveur COSMO implémente le **Conic operator splitting method **, qui est pa
 ```{julia}
 using JuMP, COSMO, IterativeSolvers, LinearMaps, OSQP, MathOptInterface, Plots
 
+x0 = zeros(n)
+x0[11] = 1.0                    # altitude 1 m en hover
+
+# --- Modèle JuMP « all-at-once »
 model3 = Model(COSMO.Optimizer)
+set_optimizer_attribute(model3, "verbose", false)
 
 @variable(model3, X[1:n, 0:T])           # états
 @variable(model3, U[1:m, 0:T-1])         # commandes
 
-# — dynamique linéaire
+# --- dynamique linéaire + gravité (affine)
+c = zeros(n)
+c[12] = -Ts * g                         # agit sur ż
 for k in 0:T-1
-    @constraint(model3, X[:, k+1] .== Ad * X[:, k] + Bd * U[:, k])
+    @constraint(model3, X[:, k+1] .== Ad * X[:, k] + Bd * U[:, k] + c)   # <-- +c
 end
 
-# — CONTRAINTE d’état initial  (= hover)  
+# --- CONTRAINTE d’état initial  (= hover)
 @constraint(model3, X[:, 0] .== x0)
 
-# — bornes (angles ±20°, poussée 0–2 mg)
+# --- bornes (angles ±20°, poussée 0–2 mg)
 deg20 = deg2rad(20.0)
 @constraint(model3, -deg20 .<= X[1, :] .<=  deg20)   # φ
 @constraint(model3, -deg20 .<= X[3, :] .<=  deg20)   # θ
 @constraint(model3, -deg20 .<= X[5, :] .<=  deg20)   # ψ
 @constraint(model3, 0       .<= U[1, :] .<= 2 * mass * g)
 
-# — coût
+# --- coût (référence alignée sur les mêmes instants que X[:,k])
 @expression(model3, running_cost,
     sum( (X[:, k] - r[:, k+1])' * Q * (X[:, k] - r[:, k+1]) +
          U[:, k]' * R * U[:, k]           for k in 0:T-1) )
@@ -994,74 +1006,53 @@ deg20 = deg2rad(20.0)
 
 @objective(model3, Min, 0.5 * running_cost + 0.5 * terminal_cost)
 
-# — point initial 
+# --- point initial
 set_start_value.(X[:, 0], x0)
 set_start_value.(U, 0.0)
-
+start_time=now()
 optimize!(model3)
+end_time = now()
+elapsed = end_time - start_time
 println("Status          : ", termination_status(model3))
+println("Objective value : ", objective_value(model3))
+println("Temps : ", elapsed)
 
 # ================================
-# Visualisation de la trajectoire et de l’erreur
+# Décomposition du coût (mêmes indices que l'objectif)
 # ================================
-
-X_val = value.(X)
+X_val = value.(X)        # DenseAxisArray indexé 0:T
 U_val = value.(U)
 
 J_state3   = 0.0
 J_control3 = 0.0
 
-# Coût d'état
-for k in 1:T
-    e_k = X_val[:,k] - r[:,k]
-    J_state3 += 0.5 * (e_k' * Q * e_k)[1]
-end
-
-# Coût de contrôle
 for k in 0:T-1
+    e_k = X_val[:,k] - r[:,k+1]                       # <-- aligné
+    J_state3 += 0.5 * (e_k' * Q * e_k)[1]
     J_control3 += 0.5 * (U_val[:,k]' * R * U_val[:,k])[1]
 end
 
-# Coût terminal
 e_final = X_val[:,T] - r[:,T+1]
 J_terminal3 = 0.5 * (e_final' * F * e_final)[1]
-
-# Coût total
 J3 = J_state3 + J_control3 + J_terminal3
 
-println("\n--- Décomposition du coût ---")
+println("\n--- Décomposition du coût : Modèle 3 ---")
 println("J_state3    = ", J_state3)
 println("J_control3  = ", J_control3)
 println("J_terminal3 = ", J_terminal3)
 println("J3 total    = ", J3)
 
+# ================================
+# Visualisation (converti en Array 1-based)
+# ================================
+solutionX = Array(value.(X))   # colonnes 1..T+1 <-> instants 0..T
+z = solutionX[11, :]           # position verticale
+x = solutionX[7, :]            # position x
+y = solutionX[9, :]            # position y
 
-
-
-
-solutionX = Array(value.(X))
-
-z = solutionX[11, :]  # position verticale
-x = solutionX[7, :]   # position x
-y = solutionX[9, :]   # position y
-
-# Erreurs de suivi
-e_z = z .- r[11, :]
-e_x = x .- r[7, :]
-e_y = y .- r[9, :]
-z = solutionX[11, :]  # position verticale
-x = solutionX[7, :]   # position x
-y = solutionX[9, :]   # position y
-
-# Erreurs de suivi
-e_z = z .- r[11, :]
-e_x = x .- r[7, :]
-e_y = y .- r[9, :]
-
-# Références
-r_z = r[11, :]
-r_x = r[7, :]
-r_y = r[9, :]
+# Références & erreurs (mêmes colonnes)
+r_z = r[11, :];  r_x = r[7, :];  r_y = r[9, :]
+e_z = z .- r_z;  e_x = x .- r_x; e_y = y .- r_y
 
 t = Ts .* (0:T)  # temps réel en secondes
 
@@ -1069,33 +1060,32 @@ t = Ts .* (0:T)  # temps réel en secondes
 plt3 = plot(layout = (3, 2), size=(1000, 800))
 
 # Trajectoire x
-plot!(plt3[1], t, x, lw=2, label="x (suivie)", color=:blue)
+plot!(plt3[1], t, x,   lw=2, label="x (suivie)", color=:blue)
 plot!(plt3[1], t, r_x, lw=2, label="x (référence)", linestyle=:dash, color=:red)
 plot!(plt3[1], title="Trajectoire en x", xlabel="Temps (s)", ylabel="x (m)", legend=:bottomright, grid=true)
 
 # Erreur x
 plot!(plt3[2], t, e_x, lw=2, label="Erreur x", color=:purple)
-plot!(plt3[2], title="Erreur de suivi (x)", xlabel="Temps (s)", label="Erreur (m)", legend=:topright, grid=true)
+plot!(plt3[2], title="Erreur de suivi (x)", xlabel="Temps (s)", ylabel="Erreur (m)", legend=:topright, grid=true)
 
 # Trajectoire y
-plot!(plt3[3], t, y, lw=2, label="y (suivie)", color=:blue)
-plot!(plt3[3], t, r_y, lw=2, label="y (référence)", inestyle=:dash, color=:red)
-plot!(plt3[3], title="Trajectoire en y", xlabel="Temps (s)", label="y (m)", legend=:bottomright, grid=true)
+plot!(plt3[3], t, y,   lw=2, label="y (suivie)", color=:blue)
+plot!(plt3[3], t, r_y, lw=2, label="y (référence)", linestyle=:dash, color=:red)
+plot!(plt3[3], title="Trajectoire en y", xlabel="Temps (s)", ylabel="y (m)", legend=:bottomright, grid=true)
 
 # Erreur y
 plot!(plt3[4], t, e_y, lw=2, label="Erreur y", color=:purple)
-plot!(plt3[4], title="Erreur de suivi (y)", xlabel="Temps (s)", label="Erreur (m)", legend=:topright, grid=true)
+plot!(plt3[4], title="Erreur de suivi (y)", xlabel="Temps (s)", ylabel="Erreur (m)", legend=:topright, grid=true)
 
 # Trajectoire z
-plot!(plt3[5], t, z, lw=2, label="z (suivie)", color=:blue)
-plot!(plt3[5], t, r_z, lw=2, label="z (référence)", inestyle=:dash, color=:red)
-plot!(plt3[5], title="Trajectoire en z", xlabel="Temps (s)", label="z (m)", legend=:bottomright, grid=true)
+plot!(plt3[5], t, z,   lw=2, label="z (suivie)", color=:blue)
+plot!(plt3[5], t, r_z, lw=2, label="z (référence)", linestyle=:dash, color=:red)
+plot!(plt3[5], title="Trajectoire en z", xlabel="Temps (s)", ylabel="z (m)", legend=:bottomright, grid=true)
 
 # Erreur z
 plot!(plt3[6], t, e_z, lw=2, label="Erreur z", color=:purple)
-plot!(plt3[6], title="Erreur de suivi (z)", xlabel="Temps (s)", label="Erreur (m)", legend=:topright, grid=true)
+plot!(plt3[6], title="Erreur de suivi (z)", xlabel="Temps (s)", ylabel="Erreur (m)", legend=:topright, grid=true)
 
-# Affichage
 display(plt3)
 
 
@@ -1103,78 +1093,87 @@ display(plt3)
 
 ## Analyse des résultats
 
-La méthode ne parvient pas à converger en moins de 5000 itérations. Toutefois, on constate une amélioration de la valeur de l'objectif qui est 10x plus petite que celle obtenue via Ipopt. Le temps de calcul est toutefois beaucoup plus élevé et on en déduit que cette méthode a une plus grande complexité que l'algorithme précédent. Nous estimons aussi que l'erreur dans notre modélisation JUmP est la cause de cette divergence. Il se pourrait que le problème ne soit plus convexe à cause de notre erreur. Nous étudiront cette hypothèse dans la phase 3.
+La méthode obtiens un résultat très similaire à Ipopt avec une valeur de la fonction objectif de 8.133889e5 qui est répartie de la même façon entre les erreurs d'état, de trajectoire et d'erreur terminale. Cependant le temps de calcul est netement supérieur avec un temps de 89398 ms.
 
-Comme le nombre de variable est différent que dans le problème formulé et présenté dans l'article, il est difficile de comparer la complexité des deux algorithmes. Lorsque le temps de calcul est limité, il est toutefois préférable d'utiliser la méthode présentée dans l'article. Les graphes présentes une erreur qui est encore une fois espectable. On observe par aiileurs que la trajectoire en y est bien meilleure avec COSMO qu'avec Ipopt. Encore une fois, on observe de plus grandes erreurs là où il y a des changements dans la valeur des dérivées de la trajectoire à suivre. Bien que la valeur optimale obtenue via COSMO soit bonne, il est possible de faire mieux avec le solveur OSQP.
+Le problème de convergence de la phase 2 à été résolu et la méthode est maintenant fonctionnelle. 
+
+Comme le nombre de variable est différent que dans le problème formulé et présenté dans l'article, il est difficile de comparer la complexité des deux algorithmes. Lorsque le temps de calcul est limité, il est toutefois préférable d'utiliser la méthode présentée dans l'article. Les graphes présentes une erreur qui est encore une fois respectable. Encore une fois, on observe de plus grandes erreurs là où il y a des changements dans la valeur des dérivées de la trajectoire à suivre. Bien que la valeur optimale obtenue via COSMO soit bonne, il est possible de faire mieux avec le solveur OSQP.
 
 # Partie 5 : Résolution avec le solver OSQP
 
 OSQP (Operator Splitting Quadratic Program) est une méthode servant a résoudre des problème quadratique à contraintes linéaires. C'est exactement les propriétés que nous souhaitons exploiter pour le problème monolithique.
+
  ```{julia}
 using LinearAlgebra, Plots, JuMP, Ipopt, COSMO, IterativeSolvers, LinearMaps, OSQP, MathOptInterface
 
-model2 = Model(OSQP.Optimizer)
-set_optimizer_attribute(model, "print_level", 1)
+x0 = zeros(n)
+x0[11] = 1.0                    # altitude 1 m en hover
 
-@variable(model2, X[1:n, 0:T])           # états
-@variable(model2, U[1:m, 0:T-1])         # commandes
+# --- Modèle JuMP « all-at-once »
+model4 = Model(OSQP.Optimizer)
+set_optimizer_attribute(model4, "verbose", false)
 
-# — dynamique linéaire
+@variable(model4, X[1:n, 0:T])           # états
+@variable(model4, U[1:m, 0:T-1])         # commandes
+
+# --- dynamique linéaire + gravité (affine)
+c = zeros(n)
+c[12] = -Ts * g                         # agit sur ż
 for k in 0:T-1
-    @constraint(model2, X[:, k+1] .== Ad * X[:, k] + Bd * U[:, k])
+    @constraint(model4, X[:, k+1] .== Ad * X[:, k] + Bd * U[:, k] + c)   # <-- +c
 end
 
-# — CONTRAINTE d’état initial  (= hover)  
-@constraint(model2, X[:, 0] .== x0)
+# --- CONTRAINTE d’état initial  (= hover)
+@constraint(model4, X[:, 0] .== x0)
 
-# — bornes (angles ±20°, poussée 0–2 mg)
+# --- bornes (angles ±20°, poussée 0–2 mg)
 deg20 = deg2rad(20.0)
-@constraint(model2, -deg20 .<= X[1, :] .<=  deg20)   # φ
-@constraint(model2, -deg20 .<= X[3, :] .<=  deg20)   # θ
-@constraint(model2, -deg20 .<= X[5, :] .<=  deg20)   # ψ
-@constraint(model2, 0       .<= U[1, :] .<= 2 * mass * g)
+@constraint(model4, -deg20 .<= X[1, :] .<=  deg20)   # φ
+@constraint(model4, -deg20 .<= X[3, :] .<=  deg20)   # θ
+@constraint(model4, -deg20 .<= X[5, :] .<=  deg20)   # ψ
+@constraint(model4, 0       .<= U[1, :] .<= 2 * mass * g)
 
-# — coût
-@expression(model2, running_cost,
+# --- coût (référence alignée sur les mêmes instants que X[:,k])
+@expression(model4, running_cost,
     sum( (X[:, k] - r[:, k+1])' * Q * (X[:, k] - r[:, k+1]) +
          U[:, k]' * R * U[:, k]           for k in 0:T-1) )
 
-@expression(model2, terminal_cost,
+@expression(model4, terminal_cost,
     (X[:, T] - r[:, T+1])' * F * (X[:, T] - r[:, T+1]) )
 
-@objective(model2, Min, 0.5 * running_cost + 0.5 * terminal_cost)
+@objective(model4, Min, 0.5 * running_cost + 0.5 * terminal_cost)
 
-# — point initial 
+# --- point initial
 set_start_value.(X[:, 0], x0)
 set_start_value.(U, 0.0)
-
-optimize!(model2)
-println("Status          : ", termination_status(model2))
-println("Objective value : ", objective_value(model2))
+start_time = now()
+optimize!(model4)
+end_time=now()
+elapsed= end_time- start_time
+println("Status          : ", termination_status(model4))
+println("Objective value : ", objective_value(model4))
+println("Temps : ", elapsed)
 
 # ================================
-# Visualisation de la trajectoire et de l’erreur
+# Décomposition du coût (mêmes indices que l'objectif)
 # ================================
-
-X_val = value.(X)
+X_val = value.(X)        # DenseAxisArray indexé 0:T
 U_val = value.(U)
 
 J_state4   = 0.0
 J_control4 = 0.0
 
-for k in 1:T
-    e_k = X_val[:,k] - r[:,k]
-    J_state4 += 0.5 * (e_k' * Q * e_k)[1]
-end
-
 for k in 0:T-1
+    e_k = X_val[:,k] - r[:,k+1]                       # <-- aligné
+    J_state4 += 0.5 * (e_k' * Q * e_k)[1]
     J_control4 += 0.5 * (U_val[:,k]' * R * U_val[:,k])[1]
 end
 
 e_final = X_val[:,T] - r[:,T+1]
 J_terminal4 = 0.5 * (e_final' * F * e_final)[1]
-
 J4 = J_state4 + J_control4 + J_terminal4
+
+
 
 println("\n--- Décomposition du coût : Modèle 4 ---")
 println("J_state4    = ", J_state4)
@@ -1182,29 +1181,17 @@ println("J_control4  = ", J_control4)
 println("J_terminal4 = ", J_terminal4)
 println("J4 total    = ", J4)
 
-solutionX = Array(value.(X))
+# ================================
+# Visualisation (converti en Array 1-based)
+# ================================
+solutionX = Array(value.(X))   # colonnes 1..T+1 <-> instants 0..T
+z = solutionX[11, :]           # position verticale
+x = solutionX[7, :]            # position x
+y = solutionX[9, :]            # position y
 
-z = solutionX[11, :]  # position verticale
-x = solutionX[7, :]   # position x
-y = solutionX[9, :]   # position y
-
-# Erreurs de suivi
-e_z = z .- r[11, :]
-e_x = x .- r[7, :]
-e_y = y .- r[9, :]
-z = solutionX[11, :]  # position verticale
-x = solutionX[7, :]   # position x
-y = solutionX[9, :]   # position y
-
-# Erreurs de suivi
-e_z = z .- r[11, :]
-e_x = x .- r[7, :]
-e_y = y .- r[9, :]
-
-# Références
-r_z = r[11, :]
-r_x = r[7, :]
-r_y = r[9, :]
+# Références & erreurs (mêmes colonnes)
+r_z = r[11, :];  r_x = r[7, :];  r_y = r[9, :]
+e_z = z .- r_z;  e_x = x .- r_x; e_y = y .- r_y
 
 t = Ts .* (0:T)  # temps réel en secondes
 
@@ -1212,40 +1199,41 @@ t = Ts .* (0:T)  # temps réel en secondes
 plt4 = plot(layout = (3, 2), size=(1000, 800))
 
 # Trajectoire x
-plot!(plt4[1], t, x, lw=2, label="x (suivie)", color=:blue)
+plot!(plt4[1], t, x,   lw=2, label="x (suivie)", color=:blue)
 plot!(plt4[1], t, r_x, lw=2, label="x (référence)", linestyle=:dash, color=:red)
 plot!(plt4[1], title="Trajectoire en x", xlabel="Temps (s)", ylabel="x (m)", legend=:bottomright, grid=true)
 
 # Erreur x
 plot!(plt4[2], t, e_x, lw=2, label="Erreur x", color=:purple)
-plot!(plt4[2], title="Erreur de suivi (x)", xlabel="Temps (s)", label="Erreur (m)", legend=:topright, grid=true)
+plot!(plt4[2], title="Erreur de suivi (x)", xlabel="Temps (s)", ylabel="Erreur (m)", legend=:topright, grid=true)
 
 # Trajectoire y
-plot!(plt4[3], t, y, lw=2, label="y (suivie)", color=:blue)
-plot!(plt4[3], t, r_y, lw=2, label="y (référence)", inestyle=:dash, color=:red)
-plot!(plt4[3], title="Trajectoire en y", xlabel="Temps (s)", label="y (m)", legend=:bottomright, grid=true)
+plot!(plt4[3], t, y,   lw=2, label="y (suivie)", color=:blue)
+plot!(plt4[3], t, r_y, lw=2, label="y (référence)", linestyle=:dash, color=:red)
+plot!(plt4[3], title="Trajectoire en y", xlabel="Temps (s)", ylabel="y (m)", legend=:bottomright, grid=true)
 
 # Erreur y
 plot!(plt4[4], t, e_y, lw=2, label="Erreur y", color=:purple)
-plot!(plt4[4], title="Erreur de suivi (y)", xlabel="Temps (s)", label="Erreur (m)", legend=:topright, grid=true)
+plot!(plt4[4], title="Erreur de suivi (y)", xlabel="Temps (s)", ylabel="Erreur (m)", legend=:topright, grid=true)
 
 # Trajectoire z
-plot!(plt4[5], t, z, lw=2, label="z (suivie)", color=:blue)
-plot!(plt4[5], t, r_z, lw=2, label="z (référence)", inestyle=:dash, color=:red)
-plot!(plt4[5], title="Trajectoire en z", xlabel="Temps (s)", label="z (m)", legend=:bottomright, grid=true)
+plot!(plt4[5], t, z,   lw=2, label="z (suivie)", color=:blue)
+plot!(plt4[5], t, r_z, lw=2, label="z (référence)", linestyle=:dash, color=:red)
+plot!(plt4[5], title="Trajectoire en z", xlabel="Temps (s)", ylabel="z (m)", legend=:bottomright, grid=true)
 
 # Erreur z
 plot!(plt4[6], t, e_z, lw=2, label="Erreur z", color=:purple)
-plot!(plt4[6], title="Erreur de suivi (z)", xlabel="Temps (s)", label="Erreur (m)", legend=:topright, grid=true)
+plot!(plt4[6], title="Erreur de suivi (z)", xlabel="Temps (s)", ylabel="Erreur (m)", legend=:topright, grid=true)
 
-# Affichage
 display(plt4)
 
 ```
 
 ## Analyse des résultats 
 
-Notons que cette méthode est bien plus efficace que Ipopt et COSMO. La trajectoire désirée est en général mieux approximée, le temps de calcul est meilleur que COSMO en restant très proche de celui d'Ipopt. De plus, la valeur optimale de l'objectif est dix fois plus petite que pour COSMO et cent fois plus petite qu'Ipopt. Cette méthode est donc à privilégier par rapport aux deux méthodes précédentes.
+La valeur de l'objectif est de 8.51560e5 ce qui es encore une fois similaire aux deux méthodes précédentes. Cependant le temps de calcul est nétement inférieur et obtiens même un meilleur résultat que Riccati avec un temps de 442ms. Cette méthode a donc de meilleur performances que la méthode du papier au niveau du temps et de la valeur objectif.
+
+Notons que cette méthode est bien plus efficace que Ipopt et COSMO. La trajectoire désirée est en général mieux approximée, le temps de calcul est meilleur que COSMO en restant très proche de celui d'Ipopt. 
 
 
 #Description de ce qui à été réalisé
@@ -1262,7 +1250,7 @@ using PrettyTables
 modeles = ["Modèle de Riccati", "Ipopt", "Cosmo", "OSQP"]
 
 # Exemples de valeurs (remplace-les)
-temps_sec = [0.811, 1.243, 0.400, 0.950]
+temps_sec = [1110, 1.078, 81.405, 0.442]
 J_state   = [J_state1, J_state2, J_state3, J_state4]
 J_control = [J_control1, J_control2, J_control3, J_control4]
 J_terminal= [J_terminal1, J_terminal2, J_terminal3, J_terminal4]
@@ -1310,6 +1298,16 @@ Faire une analyse détaillée des résultats que nous avons obtenus à partir de
 
 ## 2 jours avant la remise : 
 Écrire notre perspectice personnelle sur le projet, dire quels objectifs initiaux ont étés accomplis, compléter la section portant sur la description des difficultés que nous avons rencontrés. Finaliser le rapport, apporter des corrections mineures et faire des retouches.
+
+
+# Perspectives personelles 
+Ce projet à été interessant car il nous a permis de mettre en pratique  différents algorithmes d'optimisation ainsi que d'en découvrir de nouveaux et ce sur un sujet tel que les drones, qui est largement d'actualité. Comparer et analyser les résultats nous ont permis d'avoir une meilleure idée des algorithmes et de leurs différences
+
+
+#Ouverture 
+Une prochaine étape si nous avions plus de temps aurait pu être d'essayer  d'améliorer les performances du modèle en évitant une linéarisation globale des équations mais plutôt une  linéarisation par morceau autour de différents points d'équilibres ou en fonction d'un paramètre
+
+
 
 ## Lien Github
 
