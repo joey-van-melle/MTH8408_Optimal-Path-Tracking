@@ -813,7 +813,8 @@ display(plt1)
 
 
 La valeur de la fonction objectif est de 3,2*10^5. On remarque sur les graphiques que la trajectoire est plutot bien respectée avec de faibles erreurs de suivis.
-La fonction objectif comporte 3 parties, une partie suivie, une partie contrôle et une partie coût position finale. On constate que la partie suivi participe pour beaucoup à la fonction objectif (99,5%).
+La fonction objectif comporte 3 parties, une partie suivie, une partie contrôle et une partie coût position finale. On constate que la partie suivi participe pour beaucoup à la fonction objectif (99,5%).  
+L'algorithme à résolu le système en 547ms.
 
 
 ## partie 3 : résolution avec Ipopt
@@ -953,7 +954,7 @@ display(plt2)
 
 ## Analyse des résultats
 
-La méthode IPOPT converge belle et bien pour ce problème et on obtient une valeur de l'objectif de 8.13888e5. Il est possible de faire mieux avec des méthodes utilisant les propriétés du problème. Deux exemples de ces méthodes seront visités dans la prochaine section. Notons que la convergence a été atteinte en 4000 itérations pour un temps de 1.63e+001 secondes. On observe sur les graphiques que la solution proposée est efficace, en ce sens que le trajet à suivre est assez bien respectés. Notons que les erreurs sont plus grandes autour des points où il y a un changement dans la dérivée. Notre approximation étant une fonction lisse, cela n'est pas étonnant. L'erreur est aussi grande au temps final, ce qui peut être un problème dépendament des applications. Un grand déplacement programmé comme une somme de petites trajectoires pourrait facilement accumuler des erreurs. 
+La méthode IPOPT converge belle et bien pour ce problème et on obtient une valeur de l'objectif de 8.13888e5 en 1102 ms. Il est possible de faire mieux avec des méthodes utilisant les propriétés du problème. Deux exemples de ces méthodes seront visités dans la prochaine section.  On observe sur les graphiques que la solution proposée est efficace, en ce sens que le trajet à suivre est assez bien respectés. Notons que les erreurs sont plus grandes autour des points où il y a un changement dans la dérivée. Notre approximation étant une fonction lisse, cela n'est pas étonnant. L'erreur est aussi grande au temps final, ce qui peut être un problème dépendament des applications. Un grand déplacement programmé comme une somme de petites trajectoires pourrait facilement accumuler des erreurs. 
 
 Notons que l'erreur sur la trajectoire lors de la phase 2 à été corrigé ce qui permet une bien meilleure performance.
 
@@ -1092,11 +1093,11 @@ display(plt3)
 
 ## Analyse des résultats
 
-La méthode obtiens un résultat très similaire à Ipopt avec une valeur de la fonction objectif de 8.133889e5 qui est répartie de la même façon entre les erreurs d'état, de trajectoire et d'erreur terminale. 
+La méthode obtiens un résultat très similaire à Ipopt avec une valeur de la fonction objectif de 8.133889e5 qui est répartie de la même façon entre les erreurs d'état, de trajectoire et d'erreur terminale. Cependant le temps de calcul est netement supérieur avec un temps de 89398 ms.
 
-Le problème de convergence de la phase 2 à été résolu et la méthode est maintenant fonctionnelle et performante. 
+Le problème de convergence de la phase 2 à été résolu et la méthode est maintenant fonctionnelle. 
 
-Comme le nombre de variable est différent que dans le problème formulé et présenté dans l'article, il est difficile de comparer la complexité des deux algorithmes. Lorsque le temps de calcul est limité, il est toutefois préférable d'utiliser la méthode présentée dans l'article. Les graphes présentes une erreur qui est encore une fois espectable. On observe par aiileurs que la trajectoire en y est bien meilleure avec COSMO qu'avec Ipopt. Encore une fois, on observe de plus grandes erreurs là où il y a des changements dans la valeur des dérivées de la trajectoire à suivre. Bien que la valeur optimale obtenue via COSMO soit bonne, il est possible de faire mieux avec le solveur OSQP.
+Comme le nombre de variable est différent que dans le problème formulé et présenté dans l'article, il est difficile de comparer la complexité des deux algorithmes. Lorsque le temps de calcul est limité, il est toutefois préférable d'utiliser la méthode présentée dans l'article. Les graphes présentes une erreur qui est encore une fois respectable. Encore une fois, on observe de plus grandes erreurs là où il y a des changements dans la valeur des dérivées de la trajectoire à suivre. Bien que la valeur optimale obtenue via COSMO soit bonne, il est possible de faire mieux avec le solveur OSQP.
 
 # Partie 5 : Résolution avec le solver OSQP
 
@@ -1148,7 +1149,7 @@ set_start_value.(U, 0.0)
 start_time = now()
 optimize!(model4)
 end_time=now()
-elapsed= start_time-end_time
+elapsed= end_time- start_time
 println("Status          : ", termination_status(model4))
 println("Objective value : ", objective_value(model4))
 println("Temps : ", elapsed)
@@ -1230,7 +1231,9 @@ display(plt4)
 
 ## Analyse des résultats 
 
-Notons que cette méthode est bien plus efficace que Ipopt et COSMO. La trajectoire désirée est en général mieux approximée, le temps de calcul est meilleur que COSMO en restant très proche de celui d'Ipopt. De plus, la valeur optimale de l'objectif est dix fois plus petite que pour COSMO et cent fois plus petite qu'Ipopt. Cette méthode est donc à privilégier par rapport aux deux méthodes précédentes.
+La valeur de l'objectif est de 8.51560e5 ce qui es encore une fois similaire aux deux méthodes précédentes. Cependant le temps de calcul est nétement inférieur et obtiens même un meilleur résultat que Riccati avec un temps de 442ms. Cette méthode a donc de meilleur performances que la méthode du papier au niveau du temps et de la valeur objectif.
+
+Notons que cette méthode est bien plus efficace que Ipopt et COSMO. La trajectoire désirée est en général mieux approximée, le temps de calcul est meilleur que COSMO en restant très proche de celui d'Ipopt. 
 
 
 #Description de ce qui à été réalisé
@@ -1247,7 +1250,7 @@ using PrettyTables
 modeles = ["Modèle de Riccati", "Ipopt", "Cosmo", "OSQP"]
 
 # Exemples de valeurs (remplace-les)
-temps_sec = [0.547, 1.078, 87.205, 0.950]
+temps_sec = [1110, 1.078, 81.405, 0.442]
 J_state   = [J_state1, J_state2, J_state3, J_state4]
 J_control = [J_control1, J_control2, J_control3, J_control4]
 J_terminal= [J_terminal1, J_terminal2, J_terminal3, J_terminal4]
@@ -1295,6 +1298,16 @@ Faire une analyse détaillée des résultats que nous avons obtenus à partir de
 
 ## 2 jours avant la remise : 
 Écrire notre perspectice personnelle sur le projet, dire quels objectifs initiaux ont étés accomplis, compléter la section portant sur la description des difficultés que nous avons rencontrés. Finaliser le rapport, apporter des corrections mineures et faire des retouches.
+
+
+# Perspectives personelles 
+Ce projet à été interessant car il nous a permis de mettre en pratique  différents algorithmes d'optimisation ainsi que d'en découvrir de nouveaux et ce sur un sujet tel que les drones, qui est largement d'actualité. Comparer et analyser les résultats nous ont permis d'avoir une meilleure idée des algorithmes et de leurs différences
+
+
+#Ouverture 
+Une prochaine étape si nous avions plus de temps aurait pu être d'essayer  d'améliorer les performances du modèle en évitant une linéarisation globale des équations mais plutôt une  linéarisation par morceau autour de différents points d'équilibres ou en fonction d'un paramètre
+
+
 
 ## Lien Github
 
