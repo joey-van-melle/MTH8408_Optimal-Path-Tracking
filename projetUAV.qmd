@@ -65,13 +65,35 @@ la phase 3.
 
 Dans un premier temps, le système est modélisé de façon dynamique à partir des équations de Newton :
 
-- **Dynamique translationnelle** : influencée par la poussée verticale $U_1$ et les angles $\phi, \theta$ ;
-- **Dynamique rotationnelle** : influencée par les couples de commande $U_2, U_3, U_4$.  
-  
+- **Dynamique translationnelle** : influencée par la poussée verticale $U_1$ et les angles $\phi, \theta$ ;  
+-Où $\phi$ et $\theta$ sont respectivement les angles de roulis et de tangage
+
+- **Dynamique rotationnelle** : influencée par les couples de commande $U_2, U_3, U_4$.
+
+Dans le modèle dynamique du quadrotor, les quatre entrées de commande $U_1$, $U_2$, $U_3$ et $U_4$ correspondent aux forces et couples générés par les quatre rotors :
+\begin{align}
+    U_1 &= F_1 + F_2 + F_3 + F_4 
+    &&\text{(force totale générée par les quatre rotors, liée à la poussée verticale)} \\
+    U_2 &= F_4 - F_2 
+    &&\text{(couple de roulis, contrôle l’angle de roulis $\phi$)} \\
+    U_3 &= F_3 - F_1 
+    &&\text{(couple de tangage, contrôle l’angle de tangage $\theta$)} \\
+    U_4 &= T_2 + T_4 - T_1 - T_3 
+    &&\text{(couple de lacet, contrôle l’angle de lacet $\psi$)}
+\end{align}
+
+où $F_i$ représente la force générée par le $i$-ème rotor et $T_i$ le couple associé. 
+
+Ainsi :
+- $U_1$ agit principalement sur la \textbf{poussée verticale} et donc l'altitude.  
+- $U_2$ contrôle le \textbf{roulis} (\emph{roll}) autour de l'axe $x$.  
+- $U_3$ contrôle le \textbf{tangage} (\emph{pitch}) autour de l'axe $y$.  
+- $U_4$ contrôle le \textbf{lacet} (\emph{yaw}) autour de l'axe $z$.  
+    
   
 Le modèle dynamique est constitué de deux parties :
 
-- Équation non linéaire pour le mouvement de translation :
+- **Équation non linéaire pour le mouvement de translation :**
 
 \begin{equation}
 \begin{bmatrix}
@@ -114,8 +136,8 @@ LEB =
 
 
 
-- Équations non linéaires pour le mouvement de rotation :
-
+**- Équations non linéaires pour le mouvement de rotation :
+**
 \begin{equation}
 \begin{bmatrix}
 \dot{p} \\
@@ -213,6 +235,8 @@ En utilisant l'équation 4 dans l'équation 2, on obtient **l'équation d'Euler*
 \end{bmatrix}
 \tag{5}
 \end{equation}
+
+
 
 ## Linéarisation du modèle dynamique simplifié 
 
@@ -403,6 +427,41 @@ J = \frac{1}{2} \sum_{k = k_0}^{k_f - 1} \left( \| C_d X(k) - r(k) \|_Q^2 + \| U
 
 où $\|x\|_M^2 = x^\top M x$ est la norme quadratique pondérée par la matrice $M$, et $F$ est la matrice de coût terminal, souvent choisie égale à $Q$, donc $F = Q$.
 
+\begin{equation}
+Q =
+\left[
+\begin{array}{cccccccccccc}
+100 & 0   & 0   & 0   & 0   & 0   & 0   & 0   & 0   & 0   & 0     & 0 \\
+0   & 50  & 0   & 0   & 0   & 0   & 0   & 0   & 0   & 0   & 0     & 0 \\
+0   & 0   & 10  & 0   & 0   & 0   & 0   & 0   & 0   & 0   & 0     & 0 \\
+0   & 0   & 0   & 5   & 0   & 0   & 0   & 0   & 0   & 0   & 0     & 0 \\
+0   & 0   & 0   & 0   & 0   & 0   & 0   & 0   & 0   & 0   & 0     & 0 \\
+0   & 0   & 0   & 0   & 0   & 0   & 0   & 0   & 0   & 0   & 0     & 0 \\
+0   & 0   & 0   & 0   & 0   & 0   & 100 & 0   & 0   & 0   & 0     & 0 \\
+0   & 0   & 0   & 0   & 0   & 0   & 0   & 1   & 0   & 0   & 0     & 0 \\
+0   & 0   & 0   & 0   & 0   & 0   & 0   & 0   & 100 & 0   & 0     & 0 \\
+0   & 0   & 0   & 0   & 0   & 0   & 0   & 0   & 0   & 1   & 0     & 0 \\
+0   & 0   & 0   & 0   & 0   & 0   & 0   & 0   & 0   & 0   & 1000  & 0 \\
+0   & 0   & 0   & 0   & 0   & 0   & 0   & 0   & 0   & 0   & 0     & 0.1
+\end{array}
+\right]
+\tag{Q}
+\end{equation}
+
+\begin{equation}
+R =
+\left[
+\begin{array}{cccc}
+10 & 0 & 0 & 0 \\
+0  & 0 & 0 & 0 \\
+0  & 0 & 0 & 0 \\
+0  & 0 & 0 & 0
+\end{array}
+\right]
+\tag{R}
+\end{equation}
+
+
 
 La structure de la fonction $J$ correspond à un problème d'optimisation quadratique, tel qu'étudié dans le cadre du cours sur l'optimisation sans contrainte. En effet, il s'agit de minimiser une somme pondérée d'erreurs quadratiques entre la trajectoire suivie $C_d X(k)$ et la trajectoire de référence $r(k)$, ainsi que des efforts de commande $U(k)$ et la différence de position finale.  
 
@@ -474,13 +533,14 @@ R = \operatorname{diag}(10,\ 0,\ 0,\ 0)
 \tag{9}
 \end{equation}
 
-De part les hypothèses faites, les angles doivent être contraints près de 0
+De part les hypothèses faites, les angles doivent être contraints près de 0 :
 \begin{equation}
--20^\circ < \phi < 20^\circ \quad ; \quad
--20^\circ < \theta < 20^\circ \quad ; \quad
--20^\circ < \psi < 20^\circ
+-20^\circ \leq \phi \leq 20^\circ \quad ; \quad
+-20^\circ \leq \theta \leq 20^\circ \quad ; \quad
+-20^\circ \leq \psi \leq 20^\circ
 \tag{10}
-\end{equation} 
+\end{equation}
+
 
 
 ```{julia}
@@ -493,12 +553,12 @@ De part les hypothèses faites, les angles doivent être contraints près de 0
 using Pkg
 Pkg.activate("projet_env")
 
-Pkg.add("Plots")
+# Pkg.add("Plots")
 Pkg.add("JuMP")
-Pkg.add("Ipopt")
-Pkg.add("COSMO")
-Pkg.add("IterativeSolvers")
-Pkg.add("LinearMaps")
+ Pkg.add("Ipopt")
+ Pkg.add("COSMO")
+ Pkg.add("IterativeSolvers")
+ Pkg.add("LinearMaps")
 Pkg.add("OSQP")
 Pkg.add("MathOptInterface")
 Pkg.add("Dates")
@@ -583,10 +643,13 @@ Lg = Vector{Matrix{Float64}}(undef, T)
 C = I(n)
 P[T+1] = C' * Q * C
 G[T+1] = C' * Q * r[:, T+1]
+
+V = C' * Q * C                      # calculé une seule fois
+BdR = R \ Bd'                       # pré-calcul pour E
+E = Bd * BdR                        # équivalent à Bd * inv(R) * Bd'
+
 for k in T:-1:1
-    E = Bd * inv(R) * Bd'
-    V = C' * Q * C
-    invIplusE = inv(I + E * P[k+1])
+    invIplusE = inv(I + E * P[k+1])     # on garde l’inverse ici
     P[k] = Ad' * P[k+1] * invIplusE * Ad + V
     G[k] = (Ad' - Ad' * P[k+1] * invIplusE * E) * G[k+1] + C' * Q * r[:, k]
 end
@@ -668,8 +731,9 @@ lb_ang  = [-phi_max, -theta_max, -psi_max]
 ub_ang  = [ phi_max,  theta_max,  psi_max]
 
 for k in 1:T
-    L[k]  = inv(R + Bd' * P[k+1] * Bd) * Bd' * P[k+1] * Ad
     Lg[k] = inv(R + Bd' * P[k+1] * Bd) * Bd'
+    L[k]  = Lg[k] * P[k+1] * Ad
+    
 
     # commande (sans intégrateur) + saturation poussée
     U[:,k] = -L[k] * X[:,k] + Lg[k] * G[k+1]
